@@ -210,7 +210,6 @@ public class TransportReplicationActionTests extends ESTestCase {
         final String primaryNodeId = shardRoutingTable.primaryShard().currentNodeId();
         if (clusterService.localNode().id().equals(primaryNodeId)) {
             // the receiving node for primary action has the primary
-            clusterService.setState(stateWithStartedPrimary(index, true, 1));
             request = new Request(shardId).timeout("1ms");
             listener = new PlainActionFuture<>();
             primaryPhase = action.new PrimaryPhase(request, createTransportChannel(listener));
@@ -377,8 +376,7 @@ public class TransportReplicationActionTests extends ESTestCase {
         final PlainActionFuture<Response> listener = new PlainActionFuture<>();
         logger.debug("expecting [{}] assigned replicas, [{}] total shards. using state: \n{}", assignedReplicas, totalShards, clusterService.state().prettyPrint());
 
-        final TransportReplicationAction<Request, Request, Response>.InternalRequest internalRequest = action.new InternalRequest(request);
-        internalRequest.concreteIndex(shardId.index().name());
+        final TransportReplicationAction<Request, Request, Response>.InternalRequest internalRequest = action.new InternalRequest(request, shardId.index().name());
         Releasable reference = getOrCreateIndexShardOperationsCounter();
         assertIndexShardCounter(2);
         // TODO: set a default timeout

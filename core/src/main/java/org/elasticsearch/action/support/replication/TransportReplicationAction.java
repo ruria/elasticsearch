@@ -42,10 +42,7 @@ import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.node.DiscoveryNode;
-import org.elasticsearch.cluster.routing.IndexRoutingTable;
-import org.elasticsearch.cluster.routing.IndexShardRoutingTable;
-import org.elasticsearch.cluster.routing.ShardIterator;
-import org.elasticsearch.cluster.routing.ShardRouting;
+import org.elasticsearch.cluster.routing.*;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.io.stream.StreamInput;
@@ -113,7 +110,6 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
         this.transportReplicaAction = actionName + "[r]";
         this.executor = executor;
         this.checkWriteConsistency = checkWriteConsistency();
-
         transportService.registerRequestHandler(actionName, request, ThreadPool.Names.SAME, new OperationTransportHandler());
         transportService.registerRequestHandler(transportPrimaryAction, request, executor, new PrimaryOperationTransportHandler());
         // we must never reject on because of thread pool capacity on replicas
@@ -394,7 +390,11 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                 retryBecauseUnavailable(shardIt.shardId(), "Primary shard is not active or isn't assigned to a known node.");
                 return;
             }
-            performPrimary(primary);
+            if (primary.currentNodeId().equals(observer.observedState().nodes().localNodeId())) {
+                performPrimary(primary);
+            } else {
+                performReroute(primary);
+            }
         }
 
         /**
@@ -434,9 +434,17 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             return true;
         }
 
+        protected void performReroute(final ShardRouting primary) {
+            performAction(primary, actionName);
+        }
+
         protected void performPrimary(final ShardRouting primary) {
+            performAction(primary, transportPrimaryAction);
+        }
+
+        private void performAction(final ShardRouting primary, String action) {
             DiscoveryNode node = observer.observedState().nodes().get(primary.currentNodeId());
-            transportService.sendRequest(node, transportPrimaryAction, internalRequest.request(), transportOptions, new BaseTransportResponseHandler<Response>() {
+            transportService.sendRequest(node, action, internalRequest.request(), transportOptions, new BaseTransportResponseHandler<Response>() {
 
                 @Override
                 public Response newInstance() {
@@ -545,9 +553,15 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
         private final ClusterStateObserver observer;
 
         PrimaryPhase(Request request, TransportChannel channel) {
-            this.internalRequest = new InternalRequest(request);
-            this.channel = channel;
             this.observer = new ClusterStateObserver(clusterService, request.timeout(), logger);
+            final String concreteIndex;
+            if (resolveIndex()) {
+                concreteIndex = indexNameExpressionResolver.concreteSingleIndex(observer.observedState(), request);
+            } else {
+                concreteIndex = request.index();
+            }
+            this.internalRequest = new InternalRequest(request, concreteIndex);
+            this.channel = channel;
         }
 
         @Override
@@ -557,11 +571,9 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
 
         @Override
         protected void doRun() throws Exception {
-            if (resolveIndex()) {
-                internalRequest.concreteIndex(indexNameExpressionResolver.concreteSingleIndex(observer.observedState(), internalRequest.request()));
-            } else {
-                internalRequest.concreteIndex(internalRequest.request().index());
-            }
+            // TODO: we should invoke shards() only on ReroutePhase and
+            // pass the result along the request to the PrimaryPhase to
+            // decouple the logic further
             final ShardIterator shardIt = shards(observer.observedState(), internalRequest);
             final ShardRouting primary = resolvePrimary(shardIt);
             if (primary == null) {
@@ -1085,6 +1097,11 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
 
         InternalRequest(Request request) {
             this.request = request;
+        }
+
+        InternalRequest(Request request, String concreteIndex) {
+            this.request = request;
+            this.concreteIndex = concreteIndex;
         }
 
         public Request request() {
