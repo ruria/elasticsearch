@@ -241,7 +241,7 @@ public class TransportReplicationActionTests extends ESTestCase {
 
         TransportReplicationAction.ReroutePhase reroutePhase = action.new ReroutePhase(request, listener);
         assertTrue(reroutePhase.checkBlocks());
-        reroutePhase.performPrimary(shardRoutingTable.primaryShard());
+        reroutePhase.performAction(shardRoutingTable.primaryShard(), action.transportPrimaryAction);
         logger.info("--> primary is assigned to [{}], checking request forwarded", primaryNodeId);
         final List<CapturingTransport.CapturedRequest> capturedRequests = transport.capturedRequestsByTargetNode().get(primaryNodeId);
         assertThat(capturedRequests, notNullValue());

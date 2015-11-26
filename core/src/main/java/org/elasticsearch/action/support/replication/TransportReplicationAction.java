@@ -391,9 +391,11 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                 return;
             }
             if (primary.currentNodeId().equals(observer.observedState().nodes().localNodeId())) {
-                performPrimary(primary);
+                // perform PrimaryPhase on the local node
+                performAction(primary, transportPrimaryAction);
             } else {
-                performReroute(primary);
+                // perform ReroutePhase on the node with primary
+                performAction(primary, actionName);
             }
         }
 
@@ -434,15 +436,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             return true;
         }
 
-        protected void performReroute(final ShardRouting primary) {
-            performAction(primary, actionName);
-        }
-
-        protected void performPrimary(final ShardRouting primary) {
-            performAction(primary, transportPrimaryAction);
-        }
-
-        private void performAction(final ShardRouting primary, final String action) {
+        protected void performAction(final ShardRouting primary, final String action) {
             DiscoveryNode node = observer.observedState().nodes().get(primary.currentNodeId());
             transportService.sendRequest(node, action, internalRequest.request(), transportOptions, new BaseTransportResponseHandler<Response>() {
 
@@ -466,7 +460,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                     try {
                         // if we got disconnected from the node, or the node / shard is not in the right state (being closed)
                         if (exp.unwrapCause() instanceof ConnectTransportException || exp.unwrapCause() instanceof NodeClosedException ||
-                                retryPrimaryException(exp.unwrapCause())) {
+                                (action.equals(transportPrimaryAction) && retryPrimaryException(exp.unwrapCause()))) {
                             // we already marked it as started when we executed it (removed the listener) so pass false
                             // to re-add to the cluster listener
                             logger.trace("received an error from node the primary was assigned to ({}), scheduling a retry", exp.getMessage());
@@ -608,18 +602,6 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                 logger.trace("operation completed on primary [{}]", primary);
                 replicationPhase = new ReplicationPhase(shardsIt, primaryResponse.v2(), primaryResponse.v1(), observer, primary, internalRequest, channel, indexShardReference, shardFailedTimeout);
             } catch (Throwable e) {
-                // shard has not been allocated yet, retry it here
-                if (retryPrimaryException(e)) {
-                    logger.trace("had an error while performing operation on primary ({}), scheduling a retry.", e.getMessage());
-                    // We have to close here because when we retry we will increment get a new reference on index shard again and we do not want to
-                    // increment twice.
-                    Releasables.close(indexShardReference);
-                    // We have to reset to null here because whe we retry it might be that we never get to the point where we assign a new reference
-                    // (for example, in case the operation was rejected because queue is full). In this case we would release again once one of the finish methods is called.
-                    indexShardReference = null;
-                    finishAsFailed(e);
-                    return;
-                }
                 if (ExceptionsHelper.status(e) == RestStatus.CONFLICT) {
                     if (logger.isTraceEnabled()) {
                         logger.trace(primary.shortSummary() + ": Failed to execute [" + internalRequest.request() + "]", e);
