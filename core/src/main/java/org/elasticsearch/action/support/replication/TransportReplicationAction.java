@@ -442,7 +442,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             performAction(primary, transportPrimaryAction);
         }
 
-        private void performAction(final ShardRouting primary, String action) {
+        private void performAction(final ShardRouting primary, final String action) {
             DiscoveryNode node = observer.observedState().nodes().get(primary.currentNodeId());
             transportService.sendRequest(node, action, internalRequest.request(), transportOptions, new BaseTransportResponseHandler<Response>() {
 
@@ -571,9 +571,6 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
 
         @Override
         protected void doRun() throws Exception {
-            // TODO: we should invoke shards() only on ReroutePhase and
-            // pass the result along the request to the PrimaryPhase to
-            // decouple the logic further
             final ShardIterator shardIt = shards(observer.observedState(), internalRequest);
             final ShardRouting primary = resolvePrimary(shardIt);
             if (primary == null) {
@@ -582,11 +579,6 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             }
             if (primary.active() == false) {
                 logger.trace("primary shard [{}] is not yet active, scheduling a retry.", primary.shardId());
-                finishBecauseUnavailable(shardIt.shardId(), "Primary shard is not active or isn't assigned to a known node.");
-                return;
-            }
-            if (observer.observedState().nodes().nodeExists(primary.currentNodeId()) == false) {
-                logger.trace("primary shard [{}] is assigned to anode we do not know the node, scheduling a retry.", primary.shardId(), primary.currentNodeId());
                 finishBecauseUnavailable(shardIt.shardId(), "Primary shard is not active or isn't assigned to a known node.");
                 return;
             }
