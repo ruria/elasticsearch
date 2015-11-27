@@ -60,7 +60,7 @@ public class TransportTermVectorsAction extends TransportSingleShardAction<TermV
 
     @Override
     protected ShardIterator shards(ClusterState state, InternalRequest request) {
-        return clusterService.operationRouting().getShards(state, request.concreteIndex(), request.request().type(), request.request().id(),
+        return clusterService.operationRouting().getShards(state, request.concreteIndex(), request.request().id(),
                 request.request().routing(), request.request().preference());
     }
 

@@ -25,7 +25,6 @@ import org.elasticsearch.cluster.node.DiscoveryNodes;
 import org.elasticsearch.cluster.routing.allocation.decider.AwarenessAllocationDecider;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.Strings;
-import org.elasticsearch.common.SuppressForbidden;
 import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.math.MathUtils;
@@ -54,16 +53,12 @@ public class OperationRouting extends AbstractComponent {
         this.awarenessAllocationDecider = awarenessAllocationDecider;
     }
 
-    public ShardIterator indexShards(ClusterState clusterState, String index, String type, String id, @Nullable String routing) {
-        return shards(clusterState, index, type, id, routing).shardsIt();
+    public ShardIterator indexShards(ClusterState clusterState, String index, String id, @Nullable String routing) {
+        return shards(clusterState, index, id, routing).shardsIt();
     }
 
-    public ShardIterator deleteShards(ClusterState clusterState, String index, String type, String id, @Nullable String routing) {
-        return shards(clusterState, index, type, id, routing).shardsIt();
-    }
-
-    public ShardIterator getShards(ClusterState clusterState, String index, String type, String id, @Nullable String routing, @Nullable String preference) {
-        return preferenceActiveShardIterator(shards(clusterState, index, type, id, routing), clusterState.nodes().localNodeId(), clusterState.nodes(), preference);
+    public ShardIterator getShards(ClusterState clusterState, String index, String id, @Nullable String routing, @Nullable String preference) {
+        return preferenceActiveShardIterator(shards(clusterState, index, id, routing), clusterState.nodes().localNodeId(), clusterState.nodes(), preference);
     }
 
     public ShardIterator getShards(ClusterState clusterState, String index, int shardId, @Nullable String preference) {
@@ -102,7 +97,7 @@ public class OperationRouting extends AbstractComponent {
             final Set<String> effectiveRouting = routing.get(index);
             if (effectiveRouting != null) {
                 for (String r : effectiveRouting) {
-                    int shardId = shardId(clusterState, index, null, null, r);
+                    int shardId = generateShardId(clusterState, index, null, r);
                     IndexShardRoutingTable indexShard = indexRouting.shard(shardId);
                     if (indexShard == null) {
                         throw new ShardNotFoundException(new ShardId(index, shardId));
@@ -219,12 +214,12 @@ public class OperationRouting extends AbstractComponent {
 
     // either routing is set, or type/id are set
 
-    protected IndexShardRoutingTable shards(ClusterState clusterState, String index, String type, String id, String routing) {
-        int shardId = shardId(clusterState, index, type, id, routing);
+    protected IndexShardRoutingTable shards(ClusterState clusterState, String index, String id, String routing) {
+        int shardId = generateShardId(clusterState, index, id, routing);
         return shards(clusterState, index, shardId);
     }
 
-    protected IndexShardRoutingTable shards(ClusterState clusterState, String index, int shardId) {
+    public IndexShardRoutingTable shards(ClusterState clusterState, String index, int shardId) {
         IndexShardRoutingTable indexShard = indexRoutingTable(clusterState, index).shard(shardId);
         if (indexShard == null) {
             throw new ShardNotFoundException(new ShardId(index, shardId));
@@ -232,8 +227,11 @@ public class OperationRouting extends AbstractComponent {
         return indexShard;
     }
 
-    @SuppressForbidden(reason = "Math#abs is trappy")
-    private int shardId(ClusterState clusterState, String index, String type, String id, @Nullable String routing) {
+    public ShardId shardId(ClusterState clusterState, String index, String id, @Nullable String routing) {
+        return new ShardId(index, generateShardId(clusterState, index, id, routing));
+    }
+
+    private int generateShardId(ClusterState clusterState, String index, String id, @Nullable String routing) {
         final IndexMetaData indexMetaData = indexMetaData(clusterState, index);
         final int hash;
         if (routing == null) {

@@ -26,13 +26,11 @@ import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.metadata.MetaData;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.node.Node;
 import org.elasticsearch.test.ESTestCase;
 import org.elasticsearch.test.VersionUtils;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.nio.file.Path;
 import java.util.Arrays;
 
 public class RoutingBackwardCompatibilityTests extends ESTestCase {
@@ -60,7 +58,7 @@ public class RoutingBackwardCompatibilityTests extends ESTestCase {
                     MetaData.Builder metaData = MetaData.builder().put(indexMetaData, false);
                     RoutingTable routingTable = RoutingTable.builder().addAsNew(indexMetaData).build();
                     ClusterState clusterState = ClusterState.builder(ClusterName.DEFAULT).metaData(metaData).routingTable(routingTable).build();
-                    final int shardId = operationRouting.indexShards(clusterState, index, type, id, routing).shardId().getId();
+                    final int shardId = operationRouting.indexShards(clusterState, index, id, routing).shardId().getId();
                     assertEquals(currentExpectedShard, shardId);
                 }
             }

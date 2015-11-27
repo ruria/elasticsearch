@@ -34,7 +34,6 @@ import org.elasticsearch.cluster.action.index.MappingUpdatedAction;
 import org.elasticsearch.cluster.action.shard.ShardStateAction;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.metadata.MappingMetaData;
-import org.elasticsearch.cluster.routing.ShardIterator;
 import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
@@ -94,19 +93,19 @@ public class TransportDeleteAction extends TransportReplicationAction<DeleteRequ
     }
 
     @Override
-    protected void resolveRequest(final ClusterState state, final InternalRequest request, final ActionListener<DeleteResponse> listener) {
-        request.request().routing(state.metaData().resolveIndexRouting(request.request().routing(), request.request().index()));
+    protected void resolveRequest(final ClusterState state, final DeleteRequest request, final ActionListener<DeleteResponse> listener) {
+        request.routing(state.metaData().resolveIndexRouting(request.routing(), request.index()));
         if (state.metaData().hasIndex(request.concreteIndex())) {
             // check if routing is required, if so, do a broadcast delete
-            MappingMetaData mappingMd = state.metaData().index(request.concreteIndex()).mappingOrDefault(request.request().type());
+            MappingMetaData mappingMd = state.metaData().index(request.concreteIndex()).mappingOrDefault(request.type());
             if (mappingMd != null && mappingMd.routing().required()) {
-                if (request.request().routing() == null) {
-                    if (request.request().versionType() != VersionType.INTERNAL) {
+                if (request.routing() == null) {
+                    if (request.versionType() != VersionType.INTERNAL) {
                         // TODO: implement this feature
-                        throw new IllegalArgumentException("routing value is required for deleting documents of type [" + request.request().type()
-                                + "] while using version_type [" + request.request().versionType() + "]");
+                        throw new IllegalArgumentException("routing value is required for deleting documents of type [" + request.type()
+                                + "] while using version_type [" + request.versionType() + "]");
                     }
-                    throw new RoutingMissingException(request.concreteIndex(), request.request().type(), request.request().id());
+                    throw new RoutingMissingException(request.concreteIndex(), request.type(), request.id());
                 }
             }
         }
@@ -153,8 +152,8 @@ public class TransportDeleteAction extends TransportReplicationAction<DeleteRequ
     }
 
     @Override
-    protected ShardIterator shards(ClusterState clusterState, InternalRequest request) {
-        return clusterService.operationRouting()
-                .deleteShards(clusterService.state(), request.concreteIndex(), request.request().type(), request.request().id(), request.request().routing());
+    protected ShardId shardId(ClusterState clusterState, DeleteRequest request) {
+        return clusterService.operationRouting().shardId(clusterService.state(), request.concreteIndex(), request.id(), request.routing());
     }
+
 }

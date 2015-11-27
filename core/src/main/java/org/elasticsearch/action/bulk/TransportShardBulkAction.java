@@ -38,7 +38,6 @@ import org.elasticsearch.cluster.action.index.MappingUpdatedAction;
 import org.elasticsearch.cluster.action.shard.ShardStateAction;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.metadata.MappingMetaData;
-import org.elasticsearch.cluster.routing.ShardIterator;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.inject.Inject;
@@ -108,8 +107,8 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
     }
 
     @Override
-    protected ShardIterator shards(ClusterState clusterState, InternalRequest request) {
-        return clusterState.routingTable().index(request.concreteIndex()).shard(request.request().shardId().id()).shardsIt();
+    protected ShardId shardId(ClusterState clusterState, BulkShardRequest request) {
+        return request.shardId();
     }
 
     @Override
@@ -335,7 +334,7 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
             indexRequest.process(clusterState.metaData(), mappingMd, allowIdGeneration, request.index());
         }
 
-        return executeIndexRequestOnPrimary(request, indexRequest, indexShard);
+        return executeIndexRequestOnPrimary(indexRequest, indexShard);
     }
 
     private WriteResult<DeleteResponse> shardDeleteOperation(BulkShardRequest request, DeleteRequest deleteRequest, IndexShard indexShard) {

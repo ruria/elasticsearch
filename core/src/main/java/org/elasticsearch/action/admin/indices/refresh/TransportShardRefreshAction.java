@@ -30,7 +30,6 @@ import org.elasticsearch.cluster.action.shard.ShardStateAction;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
-import org.elasticsearch.cluster.routing.ShardIterator;
 import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
@@ -82,8 +81,8 @@ public class TransportShardRefreshAction extends TransportReplicationAction<Repl
     }
 
     @Override
-    protected ShardIterator shards(ClusterState clusterState, InternalRequest request) {
-        return clusterState.getRoutingTable().indicesRouting().get(request.concreteIndex()).getShards().get(request.request().shardId().getId()).shardsIt();
+    protected ShardId shardId(ClusterState clusterState, ReplicationRequest request) {
+        return request.shardId();
     }
 
     @Override
@@ -92,7 +91,7 @@ public class TransportShardRefreshAction extends TransportReplicationAction<Repl
     }
 
     @Override
-    protected ClusterBlockException checkRequestBlock(ClusterState state, InternalRequest request) {
+    protected ClusterBlockException checkRequestBlock(ClusterState state, ReplicationRequest request) {
         return state.blocks().indicesBlockedException(ClusterBlockLevel.METADATA_WRITE, new String[]{request.concreteIndex()});
     }
 

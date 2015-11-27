@@ -19,7 +19,6 @@
 
 package org.elasticsearch.action.termvectors;
 
-import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.DocumentRequest;
 import org.elasticsearch.action.support.ActionFilters;
@@ -80,7 +79,7 @@ public class TransportMultiTermVectorsAction extends HandledTransportAction<Mult
                 continue;
             }
             ShardId shardId = clusterService.operationRouting().getShards(clusterState, concreteSingleIndex,
-                    termVectorsRequest.type(), termVectorsRequest.id(), termVectorsRequest.routing(), null).shardId();
+                    termVectorsRequest.id(), termVectorsRequest.routing(), null).shardId();
             MultiTermVectorsShardRequest shardRequest = shardRequests.get(shardId);
             if (shardRequest == null) {
                 shardRequest = new MultiTermVectorsShardRequest(request, shardId.index().name(), shardId.id());

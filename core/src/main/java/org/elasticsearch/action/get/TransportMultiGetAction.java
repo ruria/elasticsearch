@@ -19,7 +19,6 @@
 
 package org.elasticsearch.action.get;
 
-import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.HandledTransportAction;
@@ -77,7 +76,7 @@ public class TransportMultiGetAction extends HandledTransportAction<MultiGetRequ
                 continue;
             }
             ShardId shardId = clusterService.operationRouting()
-                    .getShards(clusterState, concreteSingleIndex, item.type(), item.id(), item.routing(), null).shardId();
+                    .getShards(clusterState, concreteSingleIndex, item.id(), item.routing(), null).shardId();
             MultiGetShardRequest shardRequest = shardRequests.get(shardId);
             if (shardRequest == null) {
                 shardRequest = new MultiGetShardRequest(request, shardId.index().name(), shardId.id());

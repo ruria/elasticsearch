@@ -42,6 +42,7 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
 
     public static final TimeValue DEFAULT_TIMEOUT = new TimeValue(1, TimeUnit.MINUTES);
 
+    String concreteIndex;
     ShardId internalShardId;
 
     protected TimeValue timeout = DEFAULT_TIMEOUT;
@@ -108,6 +109,14 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
         return (T) this;
     }
 
+    public String concreteIndex() {
+        return concreteIndex;
+    }
+
+    public void setConcreteIndex(String concreteIndex) {
+        this.concreteIndex = concreteIndex;
+    }
+
     @Override
     public String[] indices() {
         return new String[]{index};
@@ -159,6 +168,7 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
         consistencyLevel = WriteConsistencyLevel.fromId(in.readByte());
         timeout = TimeValue.readTimeValue(in);
         index = in.readString();
+        concreteIndex = in.readOptionalString();
     }
 
     @Override
@@ -168,11 +178,11 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
         out.writeByte(consistencyLevel.id());
         timeout.writeTo(out);
         out.writeString(index);
+        out.writeOptionalString(concreteIndex);
     }
 
     public T setShardId(ShardId shardId) {
         this.internalShardId = shardId;
-        this.index = shardId.getIndex();
         return (T) this;
     }
 }
