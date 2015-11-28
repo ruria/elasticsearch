@@ -73,6 +73,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 /**
+ * Base class for requests that should be executed on a primary copy followed by replica copies.
+ * Subclasses can resolve the target shard and provide implementation for primary and replica operations.
+ *
+ * The action sends a primary request to node with primary copy followed by replica requests to nodes with replica copies of the resolved shard.
  */
 public abstract class TransportReplicationAction<Request extends ReplicationRequest, ReplicaRequest extends ReplicationRequest, Response extends ActionWriteResponse> extends TransportAction<Request, Response> {
 
@@ -129,13 +133,22 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
     protected abstract Response newResponseInstance();
 
     /**
+     * Primary operation on node with primary copy
      * @return A tuple containing not null values, as first value the result of the primary operation and as second value
      * the request to be executed on the replica shards.
      */
     protected abstract Tuple<Response, ReplicaRequest> shardOperationOnPrimary(ClusterState clusterState, Request shardRequest) throws Throwable;
 
+    /**
+     * Replica operation on nodes with replica copies
+     */
     protected abstract void shardOperationOnReplica(ShardId shardId, ReplicaRequest shardRequest);
 
+    /**
+     * Resolves target index and shard
+     * Note the underlying request's shardId should not be used, unless it was
+     * explicitly set in the request (e.g. in flush, bulk and refresh request)
+     */
     protected abstract ShardId shardId(ClusterState clusterState, InternalRequest internalRequest);
 
     protected abstract boolean checkWriteConsistency();
@@ -144,6 +157,9 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
         return state.blocks().globalBlockedException(ClusterBlockLevel.WRITE);
     }
 
+    /**
+     * Note the underlying request's shardId should not be used
+     */
     protected ClusterBlockException checkRequestBlock(ClusterState state, InternalRequest internalRequest) {
         return state.blocks().indexBlockedException(ClusterBlockLevel.WRITE, internalRequest.concreteIndex);
     }
@@ -154,7 +170,9 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
 
     /**
      * Resolves the request, by default doing nothing. Can be subclassed to do
-     * additional processing or validation depending on the incoming request
+     * additional processing or validation depending on the incoming request.
+     *
+     * Note the underlying request's shardId should not be used
      */
     protected void resolveRequest(ClusterState state, InternalRequest internalRequest) {
     }
@@ -357,7 +375,10 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
 
     /**
      * Responsible for routing and retrying failed operations on the primary.
-     * The actual primary operation is done in {@link PrimaryPhase}
+     * The actual primary operation is done in {@link PrimaryPhase} on the
+     * node with primary copy.
+     *
+     * Resolves index and shard id for the request before routing it to target node
      */
     final class ReroutePhase extends AbstractRunnable {
         private final ActionListener<Response> listener;
@@ -378,6 +399,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
 
         @Override
         protected void doRun() {
+            // adds shardID to request
             if (checkBlocks() == false) {
                 return;
             }
@@ -414,7 +436,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
         /**
          * checks for any cluster state blocks. Returns true if operation is OK to proceeded.
          * if false is return, no further action is needed. The method takes care of any continuation, by either
-         * responding to the listener or scheduling a retry
+         * responding to the listener or scheduling a retry.
          */
         protected boolean checkBlocks() {
             ClusterBlockException blockException = checkGlobalBlock(observer.observedState());
@@ -429,7 +451,8 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             }
             final String concreteIndex = resolveIndex() ?
                     indexNameExpressionResolver.concreteSingleIndex(observer.observedState(), request) : request.index();
-            InternalRequest internalRequest = new InternalRequest(request, concreteIndex);
+            // request does not have a shardId yet, we need to resolve the index and pass it along to resolve shardId
+            final InternalRequest internalRequest = new InternalRequest(request, concreteIndex);
             resolveRequest(observer.observedState(), internalRequest);
             blockException = checkRequestBlock(observer.observedState(), internalRequest);
             if (blockException != null) {
@@ -554,10 +577,9 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
     }
 
     /**
-     * Responsible for performing all operations up to the point we start sending requests to replica shards.
-     * When unavailable shards or any retry-able primary errors are encountered they are sent to {@link ReroutePhase}
+     * Responsible for performing primary operation locally and delegating to replication action once successful
      * <p>
-     * Note that as soon as we start sending request to replicas, state responsibility is transferred to {@link ReplicationPhase}
+     * Note that as soon as we move to replication action, state responsibility is transferred to {@link ReplicationPhase}.
      */
     final class PrimaryPhase extends AbstractRunnable {
         private final Request request;
@@ -577,12 +599,10 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             finishAsFailed(e);
         }
 
-        /**
-         * perform the operation on the node holding the primary
-         */
         @Override
         protected void doRun() throws Exception {
-            ShardId shardId = request.shardId();
+            // request shardID was set in ReroutePhase
+            final ShardId shardId = request.shardId();
             final String writeConsistencyFailure = checkWriteConsistency(shardId);
             if (writeConsistencyFailure != null) {
                 finishBecauseUnavailable(shardId, writeConsistencyFailure);
@@ -593,6 +613,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                 indexShardReference = getIndexShardOperationsCounter(shardId);
                 Tuple<Response, ReplicaRequest> primaryResponse = shardOperationOnPrimary(clusterState, request);
                 logger.trace("operation completed on primary [{}]", shardId);
+                // we cache meta data to resolve settings even if the index gets deleted after primary operation
                 IndexMetaData metaData = clusterState.metaData().index(request.shardId().getIndex());
                 replicationPhase = new ReplicationPhase(primaryResponse.v2(), primaryResponse.v1(), request.shardId(),
                         metaData, channel, indexShardReference, shardFailedTimeout);
@@ -671,6 +692,9 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             }
         }
 
+        /**
+         * upon failure, send failure back to the {@link ReroutePhase} for retrying if appropriate
+         */
         void finishAsFailed(Throwable failure) {
             if (finished.compareAndSet(false, true)) {
                 Releasables.close(indexShardReference);
@@ -697,7 +721,8 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
     }
 
     /**
-     * inner class is responsible for send the requests to all replica shards and manage the responses
+     * Responsible for sending replica requests (see {@link AsyncReplicaAction}) to nodes with replica copy, including
+     * relocating copies
      */
     final class ReplicationPhase extends AbstractRunnable {
 
@@ -716,10 +741,6 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
         private final boolean executeOnReplica;
         private final String indexUUID;
 
-        /**
-         * the constructor doesn't take any action, just calculates state. Call {@link #run()} to start
-         * replicating.
-         */
         public ReplicationPhase(ReplicaRequest replicaRequest, Response finalResponse, ShardId shardId,
                                 IndexMetaData indexMetaData, TransportChannel channel, Releasable indexShardReference,
                                 TimeValue shardFailedTimeout) {
@@ -728,18 +749,13 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             this.finalResponse = finalResponse;
             this.indexShardReference = indexShardReference;
             this.shardFailedTimeout = shardFailedTimeout;
-
-            // we double check on the state, if it got changed we need to make sure we take the latest one cause
-            // maybe a replica shard started its recovery process and we need to apply it there...
-
-            // we also need to make sure if the new state has a new primary shard (that we indexed to before) started
-            // and assigned to another node (while the indexing happened). In that case, we want to apply it on the
-            // new primary shard as well...
             this.executeOnReplica = shouldExecuteReplication(indexMetaData.getSettings());
             this.indexUUID = indexMetaData.getIndexUUID();
+
+            // we get a new state to route replication operations based on the latest shard routings and states
             this.clusterState = clusterService.state();
             this.shardIt = clusterService.operationRouting().shards(clusterState, shardId.getIndex(), shardId.id()).shardsIt();
-
+            // we calculate number of target nodes to send replication operations, including nodes with relocating shards
             int numberOfIgnoredShardInstances = 0;
             int numberOfPendingShardInstances = 0;
             String localNodeId = clusterState.nodes().localNodeId();
@@ -790,7 +806,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
         }
 
         /**
-         * start sending current requests to replicas
+         * start sending replica requests to target nodes
          */
         @Override
         protected void doRun() {
@@ -801,20 +817,31 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             ShardRouting shard;
             shardIt.reset(); // reset the iterator
             while ((shard = shardIt.nextOrNull()) != null) {
-
                 if (shard.primary() == false && executeOnReplica == false) {
+                    // If the replicas use shadow replicas, there is no reason to
+                    // perform the action on the replica, so skip it and
+                    // immediately return
+
+                    // this delays mapping updates on replicas because they have
+                    // to wait until they get the new mapping through the cluster
+                    // state, which is why we recommend pre-defined mappings for
+                    // indices using shadow replicas
                     continue;
                 }
-                // if its unassigned, nothing to do here...
+                // ignore unassigned shard
                 if (shard.unassigned()) {
                     continue;
                 }
                 // we index on a replica that is initializing as well since we might not have got the event
                 // yet that it was started. We will get an exception IllegalShardState exception if its not started
                 // and that's fine, we will ignore it
+
+                // we never execute replication operation locally as primary operation has already completed locally
+                // hence, we ignore any local shard for replication
                 if (clusterState.nodes().localNodeId().equals(shard.currentNodeId()) == false) {
                     performOnReplica(shard, shard.currentNodeId());
                 }
+                // send operation to relocating shard if not local
                 if (shard.relocating() &&  clusterState.nodes().localNodeId().equals(shard.relocatingNodeId()) == false) {
                     performOnReplica(shard, shard.relocatingNodeId());
                 }
@@ -822,7 +849,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
         }
 
         /**
-         * send operation to the given node or perform it if local
+         * send replica operation to target node
          */
         void performOnReplica(final ShardRouting shard, final String nodeId) {
             // if we don't have that node, it means that it might have failed and will be created again, in
