@@ -107,15 +107,14 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
     }
 
     @Override
-    protected ShardId shardId(ClusterState clusterState, BulkShardRequest request) {
-        return request.shardId();
+    protected ShardId shardId(ClusterState clusterState, InternalRequest internalRequest) {
+        return internalRequest.request.shardId();
     }
 
     @Override
-    protected Tuple<BulkShardResponse, BulkShardRequest> shardOperationOnPrimary(ClusterState clusterState, PrimaryOperationRequest shardRequest) {
-        final BulkShardRequest request = shardRequest.request;
+    protected Tuple<BulkShardResponse, BulkShardRequest> shardOperationOnPrimary(ClusterState clusterState, BulkShardRequest request) {
         final IndexService indexService = indicesService.indexServiceSafe(request.index());
-        final IndexShard indexShard = indexService.getShard(shardRequest.shardId.id());
+        final IndexShard indexShard = indexService.getShard(request.shardId().id());
 
         long[] preVersions = new long[request.items().length];
         VersionType[] preVersionTypes = new VersionType[request.items().length];
@@ -142,9 +141,9 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
                         throw (ElasticsearchException) e;
                     }
                     if (ExceptionsHelper.status(e) == RestStatus.CONFLICT) {
-                        logger.trace("{} failed to execute bulk item (index) {}", e, shardRequest.shardId, indexRequest);
+                        logger.trace("{} failed to execute bulk item (index) {}", e, request.shardId(), indexRequest);
                     } else {
-                        logger.debug("{} failed to execute bulk item (index) {}", e, shardRequest.shardId, indexRequest);
+                        logger.debug("{} failed to execute bulk item (index) {}", e, request.shardId(), indexRequest);
                     }
                     // if its a conflict failure, and we already executed the request on a primary (and we execute it
                     // again, due to primary relocation and only processing up to N bulk items when the shard gets closed)
@@ -177,9 +176,9 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
                         throw (ElasticsearchException) e;
                     }
                     if (ExceptionsHelper.status(e) == RestStatus.CONFLICT) {
-                        logger.trace("{} failed to execute bulk item (delete) {}", e, shardRequest.shardId, deleteRequest);
+                        logger.trace("{} failed to execute bulk item (delete) {}", e, request.shardId(), deleteRequest);
                     } else {
-                        logger.debug("{} failed to execute bulk item (delete) {}", e, shardRequest.shardId, deleteRequest);
+                        logger.debug("{} failed to execute bulk item (delete) {}", e, request.shardId(), deleteRequest);
                     }
                     // if its a conflict failure, and we already executed the request on a primary (and we execute it
                     // again, due to primary relocation and only processing up to N bulk items when the shard gets closed)
@@ -218,7 +217,7 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
                                 UpdateResponse updateResponse = new UpdateResponse(indexResponse.getShardInfo(), indexResponse.getIndex(), indexResponse.getType(), indexResponse.getId(), indexResponse.getVersion(), indexResponse.isCreated());
                                 if (updateRequest.fields() != null && updateRequest.fields().length > 0) {
                                     Tuple<XContentType, Map<String, Object>> sourceAndContent = XContentHelper.convertToMap(indexSourceAsBytes, true);
-                                    updateResponse.setGetResult(updateHelper.extractGetResult(updateRequest, shardRequest.request.index(), indexResponse.getVersion(), sourceAndContent.v2(), sourceAndContent.v1(), indexSourceAsBytes));
+                                    updateResponse.setGetResult(updateHelper.extractGetResult(updateRequest, request.index(), indexResponse.getVersion(), sourceAndContent.v2(), sourceAndContent.v1(), indexSourceAsBytes));
                                 }
                                 item = request.items()[requestIndex] = new BulkItemRequest(request.items()[requestIndex].id(), indexRequest);
                                 setResponse(item, new BulkItemResponse(item.id(), OP_TYPE_UPDATE, updateResponse));
@@ -228,7 +227,7 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
                                 DeleteResponse response = writeResult.response();
                                 DeleteRequest deleteRequest = updateResult.request();
                                 updateResponse = new UpdateResponse(response.getShardInfo(), response.getIndex(), response.getType(), response.getId(), response.getVersion(), false);
-                                updateResponse.setGetResult(updateHelper.extractGetResult(updateRequest, shardRequest.request.index(), response.getVersion(), updateResult.result.updatedSourceAsMap(), updateResult.result.updateSourceContentType(), null));
+                                updateResponse.setGetResult(updateHelper.extractGetResult(updateRequest, request.index(), response.getVersion(), updateResult.result.updatedSourceAsMap(), updateResult.result.updateSourceContentType(), null));
                                 // Replace the update request to the translated delete request to execute on the replica.
                                 item = request.items()[requestIndex] = new BulkItemRequest(request.items()[requestIndex].id(), deleteRequest);
                                 setResponse(item, new BulkItemResponse(item.id(), OP_TYPE_UPDATE, updateResponse));
@@ -263,16 +262,16 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
                             if (item.getPrimaryResponse() != null && isConflictException(t)) {
                                 setResponse(item, item.getPrimaryResponse());
                             } else if (updateResult.result == null) {
-                                setResponse(item, new BulkItemResponse(item.id(), OP_TYPE_UPDATE, new BulkItemResponse.Failure(shardRequest.request.index(), updateRequest.type(), updateRequest.id(), t)));
+                                setResponse(item, new BulkItemResponse(item.id(), OP_TYPE_UPDATE, new BulkItemResponse.Failure(request.index(), updateRequest.type(), updateRequest.id(), t)));
                             } else {
                                 switch (updateResult.result.operation()) {
                                     case UPSERT:
                                     case INDEX:
                                         IndexRequest indexRequest = updateResult.request();
                                         if (ExceptionsHelper.status(t) == RestStatus.CONFLICT) {
-                                            logger.trace("{} failed to execute bulk item (index) {}", t, shardRequest.shardId, indexRequest);
+                                            logger.trace("{} failed to execute bulk item (index) {}", t, request.shardId(), indexRequest);
                                         } else {
-                                            logger.debug("{} failed to execute bulk item (index) {}", t, shardRequest.shardId, indexRequest);
+                                            logger.debug("{} failed to execute bulk item (index) {}", t, request.shardId(), indexRequest);
                                         }
                                         setResponse(item, new BulkItemResponse(item.id(), OP_TYPE_UPDATE,
                                                 new BulkItemResponse.Failure(request.index(), indexRequest.type(), indexRequest.id(), t)));
@@ -280,9 +279,9 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
                                     case DELETE:
                                         DeleteRequest deleteRequest = updateResult.request();
                                         if (ExceptionsHelper.status(t) == RestStatus.CONFLICT) {
-                                            logger.trace("{} failed to execute bulk item (delete) {}", t, shardRequest.shardId, deleteRequest);
+                                            logger.trace("{} failed to execute bulk item (delete) {}", t, request.shardId(), deleteRequest);
                                         } else {
-                                            logger.debug("{} failed to execute bulk item (delete) {}", t, shardRequest.shardId, deleteRequest);
+                                            logger.debug("{} failed to execute bulk item (delete) {}", t, request.shardId(), deleteRequest);
                                         }
                                         setResponse(item, new BulkItemResponse(item.id(), OP_TYPE_DELETE,
                                                 new BulkItemResponse.Failure(request.index(), deleteRequest.type(), deleteRequest.id(), t)));
@@ -309,7 +308,7 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
         for (int i = 0; i < items.length; i++) {
             responses[i] = items[i].getPrimaryResponse();
         }
-        return new Tuple<>(new BulkShardResponse(shardRequest.shardId, responses), shardRequest.request);
+        return new Tuple<>(new BulkShardResponse(request.shardId(), responses), request);
     }
 
     private void setResponse(BulkItemRequest request, BulkItemResponse response) {

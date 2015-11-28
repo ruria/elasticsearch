@@ -60,11 +60,11 @@ public class TransportShardFlushAction extends TransportReplicationAction<ShardF
     }
 
     @Override
-    protected Tuple<ActionWriteResponse, ShardFlushRequest> shardOperationOnPrimary(ClusterState clusterState, PrimaryOperationRequest shardRequest) throws Throwable {
-        IndexShard indexShard = indicesService.indexServiceSafe(shardRequest.shardId.getIndex()).getShard(shardRequest.shardId.id());
-        indexShard.flush(shardRequest.request.getRequest());
+    protected Tuple<ActionWriteResponse, ShardFlushRequest> shardOperationOnPrimary(ClusterState clusterState, ShardFlushRequest shardRequest) throws Throwable {
+        IndexShard indexShard = indicesService.indexServiceSafe(shardRequest.shardId().getIndex()).getShard(shardRequest.shardId().id());
+        indexShard.flush(shardRequest.getRequest());
         logger.trace("{} flush request executed on primary", indexShard.shardId());
-        return new Tuple<>(new ActionWriteResponse(), shardRequest.request);
+        return new Tuple<>(new ActionWriteResponse(), shardRequest);
     }
 
     @Override
@@ -80,8 +80,8 @@ public class TransportShardFlushAction extends TransportReplicationAction<ShardF
     }
 
     @Override
-    protected ShardId shardId(ClusterState clusterState, ShardFlushRequest request) {
-        return request.shardId();
+    protected ShardId shardId(ClusterState clusterState, InternalRequest internalRequest) {
+        return internalRequest.request.shardId();
     }
 
     @Override
@@ -90,8 +90,8 @@ public class TransportShardFlushAction extends TransportReplicationAction<ShardF
     }
 
     @Override
-    protected ClusterBlockException checkRequestBlock(ClusterState state,  ShardFlushRequest request) {
-        return state.blocks().indicesBlockedException(ClusterBlockLevel.METADATA_WRITE, new String[]{request.concreteIndex()});
+    protected ClusterBlockException checkRequestBlock(ClusterState state, InternalRequest internalRequest) {
+        return state.blocks().indicesBlockedException(ClusterBlockLevel.METADATA_WRITE, new String[]{internalRequest.concreteIndex});
     }
 
     @Override

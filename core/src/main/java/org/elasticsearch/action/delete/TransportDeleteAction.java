@@ -93,11 +93,12 @@ public class TransportDeleteAction extends TransportReplicationAction<DeleteRequ
     }
 
     @Override
-    protected void resolveRequest(final ClusterState state, final DeleteRequest request, final ActionListener<DeleteResponse> listener) {
+    protected void resolveRequest(final ClusterState state, final InternalRequest internalRequest) {
+        DeleteRequest request = internalRequest.request;
         request.routing(state.metaData().resolveIndexRouting(request.routing(), request.index()));
-        if (state.metaData().hasIndex(request.concreteIndex())) {
+        if (state.metaData().hasIndex(internalRequest.concreteIndex)) {
             // check if routing is required, if so, do a broadcast delete
-            MappingMetaData mappingMd = state.metaData().index(request.concreteIndex()).mappingOrDefault(request.type());
+            MappingMetaData mappingMd = state.metaData().index(internalRequest.concreteIndex).mappingOrDefault(request.type());
             if (mappingMd != null && mappingMd.routing().required()) {
                 if (request.routing() == null) {
                     if (request.versionType() != VersionType.INTERNAL) {
@@ -105,7 +106,7 @@ public class TransportDeleteAction extends TransportReplicationAction<DeleteRequ
                         throw new IllegalArgumentException("routing value is required for deleting documents of type [" + request.type()
                                 + "] while using version_type [" + request.versionType() + "]");
                     }
-                    throw new RoutingMissingException(request.concreteIndex(), request.type(), request.id());
+                    throw new RoutingMissingException(internalRequest.concreteIndex, request.type(), request.id());
                 }
             }
         }
@@ -126,9 +127,8 @@ public class TransportDeleteAction extends TransportReplicationAction<DeleteRequ
     }
 
     @Override
-    protected Tuple<DeleteResponse, DeleteRequest> shardOperationOnPrimary(ClusterState clusterState, PrimaryOperationRequest shardRequest) {
-        DeleteRequest request = shardRequest.request;
-        IndexShard indexShard = indicesService.indexServiceSafe(shardRequest.shardId.getIndex()).getShard(shardRequest.shardId.id());
+    protected Tuple<DeleteResponse, DeleteRequest> shardOperationOnPrimary(ClusterState clusterState, DeleteRequest request) {
+        IndexShard indexShard = indicesService.indexServiceSafe(request.shardId().getIndex()).getShard(request.shardId().id());
         Engine.Delete delete = indexShard.prepareDelete(request.type(), request.id(), request.version(), request.versionType(), Engine.Operation.Origin.PRIMARY);
         indexShard.delete(delete);
         // update the request with the version so it will go to the replicas
@@ -138,8 +138,8 @@ public class TransportDeleteAction extends TransportReplicationAction<DeleteRequ
         assert request.versionType().validateVersionForWrites(request.version());
         processAfter(request.refresh(), indexShard, delete.getTranslogLocation());
 
-        DeleteResponse response = new DeleteResponse(shardRequest.shardId.getIndex(), request.type(), request.id(), delete.version(), delete.found());
-        return new Tuple<>(response, shardRequest.request);
+        DeleteResponse response = new DeleteResponse(request.shardId().getIndex(), request.type(), request.id(), delete.version(), delete.found());
+        return new Tuple<>(response, request);
     }
 
     @Override
@@ -152,8 +152,8 @@ public class TransportDeleteAction extends TransportReplicationAction<DeleteRequ
     }
 
     @Override
-    protected ShardId shardId(ClusterState clusterState, DeleteRequest request) {
-        return clusterService.operationRouting().shardId(clusterService.state(), request.concreteIndex(), request.id(), request.routing());
+    protected ShardId shardId(ClusterState clusterState, InternalRequest internalRequest) {
+        return clusterService.operationRouting().shardId(clusterService.state(), internalRequest.concreteIndex, internalRequest.request.id(), internalRequest.request.routing());
     }
 
 }

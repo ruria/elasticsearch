@@ -196,7 +196,6 @@ public class TransportReplicationActionTests extends ESTestCase {
 
         clusterService.setState(state(index, true, ShardRoutingState.STARTED, ShardRoutingState.STARTED));
         Request request = new Request(shardId).timeout("1ms").setShardId(shardId);
-        request.setConcreteIndex(index);
         PlainActionFuture<Response> listener = new PlainActionFuture<>();
         TransportReplicationAction.PrimaryPhase primaryPhase = action.new PrimaryPhase(request, createTransportChannel(listener));
         // the receiving node for primary action has the primary
@@ -260,7 +259,6 @@ public class TransportReplicationActionTests extends ESTestCase {
         final int totalShards = 1 + assignedReplicas + unassignedReplicas;
         final boolean passesWriteConsistency;
         Request request = new Request(shardId).consistencyLevel(randomFrom(WriteConsistencyLevel.values())).setShardId(shardId);
-        request.setConcreteIndex(index);
         switch (request.consistencyLevel()) {
             case ONE:
                 passesWriteConsistency = true;
@@ -374,7 +372,6 @@ public class TransportReplicationActionTests extends ESTestCase {
         final ShardIterator shardIt = shardRoutingTable.shardsIt();
         final ShardId shardId = shardIt.shardId();
         final Request request = new Request().setShardId(shardId);
-        request.setConcreteIndex(shardId.getIndex());
         final PlainActionFuture<Response> listener = new PlainActionFuture<>();
         logger.debug("expecting [{}] assigned replicas, [{}] total shards. using state: \n{}", assignedReplicas, totalShards, clusterService.state().prettyPrint());
 
@@ -384,7 +381,7 @@ public class TransportReplicationActionTests extends ESTestCase {
         TransportReplicationAction<Request, Request, Response>.ReplicationPhase replicationPhase =
                 action.new ReplicationPhase(request,
                         new Response(),
-                        request, createTransportChannel(listener), reference, null);
+                        request.shardId(), clusterService.state().metaData().index(shardId.getIndex()), createTransportChannel(listener), reference, null);
 
         assertThat(replicationPhase.totalShards(), equalTo(totalShards));
         assertThat(replicationPhase.pending(), equalTo(assignedReplicas));
@@ -451,7 +448,6 @@ public class TransportReplicationActionTests extends ESTestCase {
                 ShardRoutingState.STARTED));
         logger.debug("--> using initial state:\n{}", clusterService.state().prettyPrint());
         Request request = new Request(shardId).timeout("100ms").setShardId(shardId);
-        request.setConcreteIndex(index);
         PlainActionFuture<Response> listener = new PlainActionFuture<>();
 
         /**
@@ -466,7 +462,7 @@ public class TransportReplicationActionTests extends ESTestCase {
         Thread t = new Thread() {
             @Override
             public void run() {
-                primaryPhase.performPrimary(shardId);
+                primaryPhase.run();
             }
         };
         t.start();
@@ -492,10 +488,9 @@ public class TransportReplicationActionTests extends ESTestCase {
                 ShardRoutingState.STARTED, ShardRoutingState.STARTED));
         logger.debug("--> using initial state:\n{}", clusterService.state().prettyPrint());
         Request request = new Request(shardId).timeout("100ms").setShardId(shardId);
-        request.setConcreteIndex(index);
         PlainActionFuture<Response> listener = new PlainActionFuture<>();
         TransportReplicationAction.PrimaryPhase primaryPhase = action.new PrimaryPhase(request, createTransportChannel(listener));
-        primaryPhase.performPrimary(shardId);
+        primaryPhase.run();
         assertIndexShardCounter(2);
         assertThat(transport.capturedRequests().length, equalTo(1));
         // try once with successful response
@@ -503,9 +498,8 @@ public class TransportReplicationActionTests extends ESTestCase {
         assertIndexShardCounter(1);
         transport.clear();
         request = new Request(shardId).timeout("100ms").setShardId(shardId);
-        request.setConcreteIndex(index);
         primaryPhase = action.new PrimaryPhase(request, createTransportChannel(listener));
-        primaryPhase.performPrimary(shardId);
+        primaryPhase.run();
         assertIndexShardCounter(2);
         CapturingTransport.CapturedRequest[] replicationRequests = transport.capturedRequests();
         transport.clear();
@@ -636,10 +630,10 @@ public class TransportReplicationActionTests extends ESTestCase {
         }
 
         @Override
-        protected Tuple<Response, Request> shardOperationOnPrimary(ClusterState clusterState, PrimaryOperationRequest shardRequest) throws Throwable {
-            boolean executedBefore = shardRequest.request.processedOnPrimary.getAndSet(true);
+        protected Tuple<Response, Request> shardOperationOnPrimary(ClusterState clusterState, Request shardRequest) throws Throwable {
+            boolean executedBefore = shardRequest.processedOnPrimary.getAndSet(true);
             assert executedBefore == false : "request has already been executed on the primary";
-            return new Tuple<>(new Response(), shardRequest.request);
+            return new Tuple<>(new Response(), shardRequest);
         }
 
         @Override
@@ -648,8 +642,8 @@ public class TransportReplicationActionTests extends ESTestCase {
         }
 
         @Override
-        protected ShardId shardId(ClusterState clusterState, Request request) {
-            return new ShardId(request.concreteIndex(), request.shardId);
+        protected ShardId shardId(ClusterState clusterState, InternalRequest internalRequest) {
+            return new ShardId(internalRequest.concreteIndex, internalRequest.request.shardId);
         }
 
         @Override
@@ -690,8 +684,8 @@ public class TransportReplicationActionTests extends ESTestCase {
         }
 
         @Override
-        protected Tuple<Response, Request> shardOperationOnPrimary(ClusterState clusterState, PrimaryOperationRequest shardRequest) throws Throwable {
-            return throwException(shardRequest.shardId);
+        protected Tuple<Response, Request> shardOperationOnPrimary(ClusterState clusterState, Request shardRequest) throws Throwable {
+            return throwException(shardRequest.shardId());
         }
 
         private Tuple<Response, Request> throwException(ShardId shardId) {
@@ -728,9 +722,9 @@ public class TransportReplicationActionTests extends ESTestCase {
         }
 
         @Override
-        protected Tuple<Response, Request> shardOperationOnPrimary(ClusterState clusterState, PrimaryOperationRequest shardRequest) throws Throwable {
+        protected Tuple<Response, Request> shardOperationOnPrimary(ClusterState clusterState, Request shardRequest) throws Throwable {
             awaitLatch();
-            return new Tuple<>(new Response(), shardRequest.request);
+            return new Tuple<>(new Response(), shardRequest);
         }
 
         private void awaitLatch() throws InterruptedException {

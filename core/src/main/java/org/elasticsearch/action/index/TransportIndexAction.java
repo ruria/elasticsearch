@@ -119,14 +119,15 @@ public class TransportIndexAction extends TransportReplicationAction<IndexReques
     }
 
     @Override
-    protected void resolveRequest(ClusterState state, IndexRequest request, ActionListener<IndexResponse> indexResponseActionListener) {
+    protected void resolveRequest(ClusterState state, InternalRequest internalRequest) {
         MetaData metaData = clusterService.state().metaData();
+        IndexRequest request = internalRequest.request;
 
         MappingMetaData mappingMd = null;
-        if (metaData.hasIndex(request.concreteIndex())) {
-            mappingMd = metaData.index(request.concreteIndex()).mappingOrDefault(request.type());
+        if (metaData.hasIndex(internalRequest.concreteIndex)) {
+            mappingMd = metaData.index(internalRequest.concreteIndex).mappingOrDefault(request.type());
         }
-        request.process(metaData, mappingMd, allowIdGeneration, request.concreteIndex());
+        request.process(metaData, mappingMd, allowIdGeneration, internalRequest.concreteIndex);
     }
 
     private void innerExecute(final IndexRequest request, final ActionListener<IndexResponse> listener) {
@@ -144,33 +145,32 @@ public class TransportIndexAction extends TransportReplicationAction<IndexReques
     }
 
     @Override
-    protected ShardId shardId(ClusterState clusterState, IndexRequest request) {
+    protected ShardId shardId(ClusterState clusterState, InternalRequest internalRequest) {
         return clusterService.operationRouting()
-                .shardId(clusterService.state(), request.concreteIndex(), request.id(), request.routing());
+                .shardId(clusterService.state(), internalRequest.concreteIndex, internalRequest.request.id(), internalRequest.request.routing());
     }
 
     @Override
-    protected Tuple<IndexResponse, IndexRequest> shardOperationOnPrimary(ClusterState clusterState, PrimaryOperationRequest shardRequest) throws Throwable {
-        final IndexRequest request = shardRequest.request;
+    protected Tuple<IndexResponse, IndexRequest> shardOperationOnPrimary(ClusterState clusterState, IndexRequest request) throws Throwable {
 
         // validate, if routing is required, that we got routing
-        IndexMetaData indexMetaData = clusterState.metaData().index(shardRequest.shardId.getIndex());
+        IndexMetaData indexMetaData = clusterState.metaData().index(request.shardId().getIndex());
         MappingMetaData mappingMd = indexMetaData.mappingOrDefault(request.type());
         if (mappingMd != null && mappingMd.routing().required()) {
             if (request.routing() == null) {
-                throw new RoutingMissingException(shardRequest.shardId.getIndex(), request.type(), request.id());
+                throw new RoutingMissingException(request.shardId().getIndex(), request.type(), request.id());
             }
         }
 
-        IndexService indexService = indicesService.indexServiceSafe(shardRequest.shardId.getIndex());
-        IndexShard indexShard = indexService.getShard(shardRequest.shardId.id());
+        IndexService indexService = indicesService.indexServiceSafe(request.shardId().getIndex());
+        IndexShard indexShard = indexService.getShard(request.shardId().id());
 
         final WriteResult<IndexResponse> result = executeIndexRequestOnPrimary(request, indexShard);
 
         final IndexResponse response = result.response;
         final Translog.Location location = result.location;
         processAfter(request.refresh(), indexShard, location);
-        return new Tuple<>(response, shardRequest.request);
+        return new Tuple<>(response, request);
     }
 
     @Override

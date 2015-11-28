@@ -61,11 +61,11 @@ public class TransportShardRefreshAction extends TransportReplicationAction<Repl
     }
 
     @Override
-    protected Tuple<ActionWriteResponse, ReplicationRequest> shardOperationOnPrimary(ClusterState clusterState, PrimaryOperationRequest shardRequest) throws Throwable {
-        IndexShard indexShard = indicesService.indexServiceSafe(shardRequest.shardId.getIndex()).getShard(shardRequest.shardId.id());
+    protected Tuple<ActionWriteResponse, ReplicationRequest> shardOperationOnPrimary(ClusterState clusterState, ReplicationRequest shardRequest) throws Throwable {
+        IndexShard indexShard = indicesService.indexServiceSafe(shardRequest.shardId().getIndex()).getShard(shardRequest.shardId().id());
         indexShard.refresh("api");
         logger.trace("{} refresh request executed on primary", indexShard.shardId());
-        return new Tuple<>(new ActionWriteResponse(), shardRequest.request);
+        return new Tuple<>(new ActionWriteResponse(), shardRequest);
     }
 
     @Override
@@ -81,8 +81,8 @@ public class TransportShardRefreshAction extends TransportReplicationAction<Repl
     }
 
     @Override
-    protected ShardId shardId(ClusterState clusterState, ReplicationRequest request) {
-        return request.shardId();
+    protected ShardId shardId(ClusterState clusterState, InternalRequest internalRequest) {
+        return internalRequest.request.shardId();
     }
 
     @Override
@@ -91,8 +91,8 @@ public class TransportShardRefreshAction extends TransportReplicationAction<Repl
     }
 
     @Override
-    protected ClusterBlockException checkRequestBlock(ClusterState state, ReplicationRequest request) {
-        return state.blocks().indicesBlockedException(ClusterBlockLevel.METADATA_WRITE, new String[]{request.concreteIndex()});
+    protected ClusterBlockException checkRequestBlock(ClusterState state, InternalRequest internalRequest) {
+        return state.blocks().indicesBlockedException(ClusterBlockLevel.METADATA_WRITE, new String[]{internalRequest.concreteIndex});
     }
 
     @Override
