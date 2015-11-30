@@ -403,33 +403,37 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             if (checkBlocks() == false) {
                 return;
             }
-            IndexRoutingTable indexRoutingTable = observer.observedState().getRoutingTable().index(request.shardId().getIndex());
-            if (indexRoutingTable != null) {
-                IndexShardRoutingTable shardRoutingTable = indexRoutingTable.shard(request.shardId().getId());
-                if (shardRoutingTable != null) {
-                    final ShardRouting primary = shardRoutingTable.primaryShard();
-                    if (primary.active() == false) {
-                        logger.trace("primary shard [{}] is not yet active, scheduling a retry.", primary.shardId());
-                        retryBecauseUnavailable(request.shardId(), "primary shard is not active or isn't assigned to a known node.");
-                        return;
-                    }
-                    if (observer.observedState().nodes().nodeExists(primary.currentNodeId()) == false) {
-                        logger.trace("primary shard [{}] is assigned to anode we do not know the node, scheduling a retry.", primary.shardId(), primary.currentNodeId());
-                        retryBecauseUnavailable(request.shardId(), "primary shard is not active or isn't assigned to a known node.");
-                        return;
-                    }
-                    if (primary.currentNodeId().equals(observer.observedState().nodes().localNodeId())) {
-                        // perform PrimaryPhase on the local node
-                        performAction(primary, transportPrimaryAction);
-                    } else {
-                        // perform ReroutePhase on the node with primary
-                        performAction(primary, actionName);
-                    }
-                } else {
-                    retryBecauseUnavailable(request.shardId(), "shards are not active or isn't assigned to a known node.");
-                }
+            final IndexRoutingTable indexRoutingTable = observer.observedState().getRoutingTable().index(request.shardId().getIndex());
+            if (indexRoutingTable == null) {
+                logger.trace("index for shard [{}] is not found, scheduling a retry.", request.shardId());
+                retryBecauseUnavailable(request.shardId(), "index is not active");
+                return;
+            }
+            final IndexShardRoutingTable shardRoutingTable = indexRoutingTable.shard(request.shardId().getId());
+            if (shardRoutingTable == null) {
+                logger.trace("routing for shard [{}] is not found, scheduling a retry.", request.shardId());
+                retryBecauseUnavailable(request.shardId(), "primary shard is not active");
+                return;
+            }
+            final ShardRouting primary = shardRoutingTable.primaryShard();
+            if (primary == null || primary.active() == false) {
+                logger.trace("primary shard [{}] is not yet active, scheduling a retry.", request.shardId());
+                retryBecauseUnavailable(request.shardId(), "primary shard is not active");
+                return;
+            }
+            if (observer.observedState().nodes().nodeExists(primary.currentNodeId()) == false) {
+                logger.trace("primary shard [{}] is assigned to an unknown node [{}], scheduling a retry.", request.shardId(), primary.currentNodeId());
+                retryBecauseUnavailable(request.shardId(), "primary shard isn't assigned to a known node.");
+                return;
+            }
+            if (primary.currentNodeId().equals(observer.observedState().nodes().localNodeId())) {
+                // perform PrimaryPhase on the local node
+                logger.trace("perform primary action for shard [{}] on node [{}]", request.shardId(), primary.currentNodeId());
+                performAction(primary, transportPrimaryAction);
             } else {
-                retryBecauseUnavailable(request.shardId(), "index is not active or isn't assigned to a known node.");
+                // perform ReroutePhase on the node with primary
+                logger.trace("reroute primary action for shard [{}] to node [{}]", request.shardId(), primary.currentNodeId());
+                performAction(primary, actionName);
             }
         }
 
