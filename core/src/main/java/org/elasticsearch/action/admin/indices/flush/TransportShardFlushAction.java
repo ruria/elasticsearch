@@ -26,7 +26,6 @@ import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.action.index.MappingUpdatedAction;
 import org.elasticsearch.cluster.action.shard.ShardStateAction;
-import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.common.collect.Tuple;
@@ -80,18 +79,18 @@ public class TransportShardFlushAction extends TransportReplicationAction<ShardF
     }
 
     @Override
-    protected ShardId shardId(ClusterState clusterState, InternalRequest internalRequest) {
-        return internalRequest.request.shardId();
+    protected ClusterBlockLevel globalBlockLevel() {
+        return ClusterBlockLevel.METADATA_WRITE;
     }
 
     @Override
-    protected ClusterBlockException checkGlobalBlock(ClusterState state) {
-        return state.blocks().globalBlockedException(ClusterBlockLevel.METADATA_WRITE);
+    protected ClusterBlockLevel indexBlockLevel() {
+        return ClusterBlockLevel.METADATA_WRITE;
     }
 
     @Override
-    protected ClusterBlockException checkRequestBlock(ClusterState state, InternalRequest internalRequest) {
-        return state.blocks().indicesBlockedException(ClusterBlockLevel.METADATA_WRITE, new String[]{internalRequest.concreteIndex});
+    protected void resolveRequest(ClusterState state, String concreteIndex, ShardFlushRequest request) {
+        // request shardID already resolved at request construction
     }
 
     @Override

@@ -61,6 +61,15 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
     }
 
     /**
+     * Creates a new request with resolved shard id
+     */
+    public ReplicationRequest(ActionRequest request, ShardId shardId) {
+        super(request);
+        this.index = shardId.getIndex();
+        this.internalShardId = shardId;
+    }
+
+    /**
      * Copy constructor that creates a new request that is a copy of the one provided as an argument.
      */
     protected ReplicationRequest(T request) {

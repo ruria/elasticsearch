@@ -119,15 +119,16 @@ public class TransportIndexAction extends TransportReplicationAction<IndexReques
     }
 
     @Override
-    protected void resolveRequest(ClusterState state, InternalRequest internalRequest) {
+    protected void resolveRequest(ClusterState state, String concreteIndex, IndexRequest request) {
         MetaData metaData = clusterService.state().metaData();
-        IndexRequest request = internalRequest.request;
 
         MappingMetaData mappingMd = null;
-        if (metaData.hasIndex(internalRequest.concreteIndex)) {
-            mappingMd = metaData.index(internalRequest.concreteIndex).mappingOrDefault(request.type());
+        if (metaData.hasIndex(concreteIndex)) {
+            mappingMd = metaData.index(concreteIndex).mappingOrDefault(request.type());
         }
-        request.process(metaData, mappingMd, allowIdGeneration, internalRequest.concreteIndex);
+        request.process(metaData, mappingMd, allowIdGeneration, concreteIndex);
+        ShardId shardId = clusterService.operationRouting().shardId(clusterService.state(), concreteIndex, request.id(), request.routing());
+        request.setShardId(shardId);
     }
 
     private void innerExecute(final IndexRequest request, final ActionListener<IndexResponse> listener) {
@@ -142,12 +143,6 @@ public class TransportIndexAction extends TransportReplicationAction<IndexReques
     @Override
     protected IndexResponse newResponseInstance() {
         return new IndexResponse();
-    }
-
-    @Override
-    protected ShardId shardId(ClusterState clusterState, InternalRequest internalRequest) {
-        return clusterService.operationRouting()
-                .shardId(clusterService.state(), internalRequest.concreteIndex, internalRequest.request.id(), internalRequest.request.routing());
     }
 
     @Override

@@ -594,7 +594,8 @@ public class TransportReplicationActionTests extends ESTestCase {
         Request(ShardId shardId) {
             this();
             this.shardId = shardId.id();
-            this.index(shardId.index().name());
+            this.setShardId(shardId);
+            this.index(shardId.getIndex());
             // keep things simple
         }
 
@@ -642,8 +643,7 @@ public class TransportReplicationActionTests extends ESTestCase {
         }
 
         @Override
-        protected ShardId shardId(ClusterState clusterState, InternalRequest internalRequest) {
-            return new ShardId(internalRequest.concreteIndex, internalRequest.request.shardId);
+        protected void resolveRequest(ClusterState state, String concreteIndex, Request request) {
         }
 
         @Override

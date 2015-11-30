@@ -54,7 +54,7 @@ public class TransportRefreshAction extends TransportBroadcastReplicationAction<
 
     @Override
     protected ReplicationRequest newShardRequest(RefreshRequest request, ShardId shardId) {
-        return new ReplicationRequest(request).setShardId(shardId).index(shardId.getIndex());
+        return new ReplicationRequest(request, shardId);
     }
 
     @Override

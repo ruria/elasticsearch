@@ -107,8 +107,8 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
     }
 
     @Override
-    protected ShardId shardId(ClusterState clusterState, InternalRequest internalRequest) {
-        return internalRequest.request.shardId();
+    protected void resolveRequest(ClusterState state, String concreteIndex, BulkShardRequest request) {
+        // the request shardID already resolved at request construction
     }
 
     @Override

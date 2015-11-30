@@ -144,24 +144,20 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
      */
     protected abstract void shardOperationOnReplica(ShardId shardId, ReplicaRequest shardRequest);
 
-    /**
-     * Resolves target index and shard
-     * Note the underlying request's shardId should not be used, unless it was
-     * explicitly set in the request (e.g. in flush, bulk and refresh request)
-     */
-    protected abstract ShardId shardId(ClusterState clusterState, InternalRequest internalRequest);
-
     protected abstract boolean checkWriteConsistency();
 
-    protected ClusterBlockException checkGlobalBlock(ClusterState state) {
-        return state.blocks().globalBlockedException(ClusterBlockLevel.WRITE);
+    /**
+     * cluster block level to check before request execution
+     */
+    protected ClusterBlockLevel globalBlockLevel() {
+        return ClusterBlockLevel.WRITE;
     }
 
     /**
-     * Note the underlying request's shardId should not be used
+     * index block level to check before request execution
      */
-    protected ClusterBlockException checkRequestBlock(ClusterState state, InternalRequest internalRequest) {
-        return state.blocks().indexBlockedException(ClusterBlockLevel.WRITE, internalRequest.concreteIndex);
+    protected ClusterBlockLevel indexBlockLevel() {
+        return ClusterBlockLevel.WRITE;
     }
 
     protected boolean resolveIndex() {
@@ -169,13 +165,10 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
     }
 
     /**
-     * Resolves the request, by default doing nothing. Can be subclassed to do
-     * additional processing or validation depending on the incoming request.
-     *
-     * Note the underlying request's shardId should not be used
+     * Resolves the target shard id of the incoming request.
+     * Additional processing or validation of the request should be done here.
      */
-    protected void resolveRequest(ClusterState state, InternalRequest internalRequest) {
-    }
+    protected abstract void resolveRequest(ClusterState state, String concreteIndex, Request request);
 
     protected TransportRequestOptions transportOptions() {
         return TransportRequestOptions.EMPTY;
@@ -399,7 +392,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
 
         @Override
         protected void doRun() {
-            // adds shardID to request
+            // shardID added to the request, as a side effect of calling resolveRequest
             if (checkBlocks() == false) {
                 return;
             }
@@ -427,11 +420,9 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                 return;
             }
             if (primary.currentNodeId().equals(observer.observedState().nodes().localNodeId())) {
-                // perform PrimaryPhase on the local node
                 logger.trace("perform primary action for shard [{}] on node [{}]", request.shardId(), primary.currentNodeId());
                 performAction(primary, transportPrimaryAction);
             } else {
-                // perform ReroutePhase on the node with primary
                 logger.trace("reroute primary action for shard [{}] to node [{}]", request.shardId(), primary.currentNodeId());
                 performAction(primary, actionName);
             }
@@ -443,7 +434,8 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
          * responding to the listener or scheduling a retry.
          */
         protected boolean checkBlocks() {
-            ClusterBlockException blockException = checkGlobalBlock(observer.observedState());
+            final ClusterState clusterState = observer.observedState();
+            ClusterBlockException blockException = clusterState.blocks().globalBlockedException(globalBlockLevel());
             if (blockException != null) {
                 if (blockException.retryable()) {
                     logger.trace("cluster is blocked ({}), scheduling a retry", blockException.getMessage());
@@ -454,11 +446,11 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                 return false;
             }
             final String concreteIndex = resolveIndex() ?
-                    indexNameExpressionResolver.concreteSingleIndex(observer.observedState(), request) : request.index();
-            // request does not have a shardId yet, we need to resolve the index and pass it along to resolve shardId
-            final InternalRequest internalRequest = new InternalRequest(request, concreteIndex);
-            resolveRequest(observer.observedState(), internalRequest);
-            blockException = checkRequestBlock(observer.observedState(), internalRequest);
+                    indexNameExpressionResolver.concreteSingleIndex(clusterState, request) : request.index();
+            // request does not have a shardId yet, we need to pass the concrete index to resolve shardId
+            resolveRequest(clusterState, concreteIndex, request);
+            assert request.shardId() != null : "request shardID must be set in resolveRequest";
+            blockException = clusterState.blocks().indexBlockedException(indexBlockLevel(), concreteIndex);
             if (blockException != null) {
                 if (blockException.retryable()) {
                     logger.trace("cluster is blocked ({}), scheduling a retry", blockException.getMessage());
@@ -468,7 +460,6 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                 }
                 return false;
             }
-            request.setShardId(shardId(clusterService.state(), internalRequest));
             return true;
         }
 
@@ -567,16 +558,6 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
 
         void retryBecauseUnavailable(ShardId shardId, String message) {
             retry(new UnavailableShardsException(shardId, message + " Timeout: [" + request.timeout() + "], request: " + request.toString()));
-        }
-    }
-
-    protected class InternalRequest {
-        public final Request request;
-        public final String concreteIndex;
-
-        private InternalRequest(Request request, String concreteIndex) {
-            this.request = request;
-            this.concreteIndex = concreteIndex;
         }
     }
 
@@ -832,7 +813,6 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                     // indices using shadow replicas
                     continue;
                 }
-                // ignore unassigned shard
                 if (shard.unassigned()) {
                     continue;
                 }

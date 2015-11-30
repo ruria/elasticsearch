@@ -93,12 +93,11 @@ public class TransportDeleteAction extends TransportReplicationAction<DeleteRequ
     }
 
     @Override
-    protected void resolveRequest(final ClusterState state, final InternalRequest internalRequest) {
-        DeleteRequest request = internalRequest.request;
+    protected void resolveRequest(final ClusterState state, String concreteIndex, DeleteRequest request) {
         request.routing(state.metaData().resolveIndexRouting(request.routing(), request.index()));
-        if (state.metaData().hasIndex(internalRequest.concreteIndex)) {
+        if (state.metaData().hasIndex(concreteIndex)) {
             // check if routing is required, if so, do a broadcast delete
-            MappingMetaData mappingMd = state.metaData().index(internalRequest.concreteIndex).mappingOrDefault(request.type());
+            MappingMetaData mappingMd = state.metaData().index(concreteIndex).mappingOrDefault(request.type());
             if (mappingMd != null && mappingMd.routing().required()) {
                 if (request.routing() == null) {
                     if (request.versionType() != VersionType.INTERNAL) {
@@ -106,10 +105,12 @@ public class TransportDeleteAction extends TransportReplicationAction<DeleteRequ
                         throw new IllegalArgumentException("routing value is required for deleting documents of type [" + request.type()
                                 + "] while using version_type [" + request.versionType() + "]");
                     }
-                    throw new RoutingMissingException(internalRequest.concreteIndex, request.type(), request.id());
+                    throw new RoutingMissingException(concreteIndex, request.type(), request.id());
                 }
             }
         }
+        ShardId shardId = clusterService.operationRouting().shardId(clusterService.state(), concreteIndex, request.id(), request.routing());
+        request.setShardId(shardId);
     }
 
     private void innerExecute(final DeleteRequest request, final ActionListener<DeleteResponse> listener) {
@@ -149,11 +150,6 @@ public class TransportDeleteAction extends TransportReplicationAction<DeleteRequ
 
         indexShard.delete(delete);
         processAfter(request.refresh(), indexShard, delete.getTranslogLocation());
-    }
-
-    @Override
-    protected ShardId shardId(ClusterState clusterState, InternalRequest internalRequest) {
-        return clusterService.operationRouting().shardId(clusterService.state(), internalRequest.concreteIndex, internalRequest.request.id(), internalRequest.request.routing());
     }
 
 }

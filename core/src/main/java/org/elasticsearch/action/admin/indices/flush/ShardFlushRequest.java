@@ -22,6 +22,7 @@ package org.elasticsearch.action.admin.indices.flush;
 import org.elasticsearch.action.support.replication.ReplicationRequest;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
+import org.elasticsearch.index.shard.ShardId;
 
 import java.io.IOException;
 
@@ -29,9 +30,11 @@ public class ShardFlushRequest extends ReplicationRequest<ShardFlushRequest> {
 
     private FlushRequest request = new FlushRequest();
 
-    public ShardFlushRequest(FlushRequest request) {
+    public ShardFlushRequest(FlushRequest request, ShardId shardId) {
         super(request);
         this.request = request;
+        this.index = shardId.getIndex();
+        this.setShardId(shardId);
     }
 
     public ShardFlushRequest() {
