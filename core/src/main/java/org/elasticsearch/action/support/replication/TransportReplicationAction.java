@@ -421,10 +421,10 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             }
             if (primary.currentNodeId().equals(observer.observedState().nodes().localNodeId())) {
                 logger.trace("perform primary action for shard [{}] on node [{}]", request.shardId(), primary.currentNodeId());
-                performAction(primary, transportPrimaryAction);
+                performAction(primary.currentNodeId(), transportPrimaryAction);
             } else {
                 logger.trace("reroute primary action for shard [{}] to node [{}]", request.shardId(), primary.currentNodeId());
-                performAction(primary, actionName);
+                performAction(primary.currentNodeId(), actionName);
             }
         }
 
@@ -463,8 +463,8 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             return true;
         }
 
-        private void performAction(final ShardRouting primary, final String action) {
-            DiscoveryNode node = observer.observedState().nodes().get(primary.currentNodeId());
+        private void performAction(final String nodeId, final String action) {
+            DiscoveryNode node = observer.observedState().nodes().get(nodeId);
             final boolean isPrimaryAction = action.equals(transportPrimaryAction);
             transportService.sendRequest(node, action, request, transportOptions, new BaseTransportResponseHandler<Response>() {
 
