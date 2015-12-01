@@ -447,9 +447,6 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             }
             final String concreteIndex = resolveIndex() ?
                     indexNameExpressionResolver.concreteSingleIndex(clusterState, request) : request.index();
-            // request does not have a shardId yet, we need to pass the concrete index to resolve shardId
-            resolveRequest(clusterState, concreteIndex, request);
-            assert request.shardId() != null : "request shardID must be set in resolveRequest";
             blockException = clusterState.blocks().indexBlockedException(indexBlockLevel(), concreteIndex);
             if (blockException != null) {
                 if (blockException.retryable()) {
@@ -460,6 +457,9 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                 }
                 return false;
             }
+            // request does not have a shardId yet, we need to pass the concrete index to resolve shardId
+            resolveRequest(clusterState, concreteIndex, request);
+            assert request.shardId() != null : "request shardID must be set in resolveRequest";
             return true;
         }
 
