@@ -147,14 +147,14 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
     protected abstract boolean checkWriteConsistency();
 
     /**
-     * cluster block level to check before request execution
+     * Cluster level block to check before request execution
      */
     protected ClusterBlockLevel globalBlockLevel() {
         return ClusterBlockLevel.WRITE;
     }
 
     /**
-     * index block level to check before request execution
+     * Index level block to check before request execution
      */
     protected ClusterBlockLevel indexBlockLevel() {
         return ClusterBlockLevel.WRITE;
@@ -587,6 +587,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
         @Override
         protected void doRun() throws Exception {
             // request shardID was set in ReroutePhase
+            assert request.shardId() != null : "request shardID must be set prior to primary phase";
             final ShardId shardId = request.shardId();
             final String writeConsistencyFailure = checkWriteConsistency(shardId);
             if (writeConsistencyFailure != null) {
@@ -848,8 +849,8 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                     transportOptions, new EmptyTransportResponseHandler(ThreadPool.Names.SAME) {
                         @Override
                         public void handleResponse(TransportResponse.Empty vResponse) {
-                                                                                    onReplicaSuccess();
-                                                                                                                                                           }
+                            onReplicaSuccess();
+                        }
 
                         @Override
                         public void handleException(TransportException exp) {
