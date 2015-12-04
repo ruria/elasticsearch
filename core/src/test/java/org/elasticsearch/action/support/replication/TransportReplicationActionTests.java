@@ -129,7 +129,7 @@ public class TransportReplicationActionTests extends ESTestCase {
                 .addGlobalBlock(new ClusterBlock(1, "non retryable", false, true, RestStatus.SERVICE_UNAVAILABLE, ClusterBlockLevel.ALL));
         clusterService.setState(ClusterState.builder(clusterService.state()).blocks(block));
         TransportReplicationAction.ReroutePhase reroutePhase = action.new ReroutePhase(request, listener);
-        assertFalse("primary phase should stop execution", reroutePhase.checkBlocks());
+        assertFalse("primary phase should stop execution", reroutePhase.checkBlocksAndResolveRequest());
         assertListenerThrows("primary phase should fail operation", listener, ClusterBlockException.class);
 
         block = ClusterBlocks.builder()
@@ -137,13 +137,13 @@ public class TransportReplicationActionTests extends ESTestCase {
         clusterService.setState(ClusterState.builder(clusterService.state()).blocks(block));
         listener = new PlainActionFuture<>();
         reroutePhase = action.new ReroutePhase(new Request().timeout("5ms"), listener);
-        assertFalse("primary phase should stop execution on retryable block", reroutePhase.checkBlocks());
+        assertFalse("primary phase should stop execution on retryable block", reroutePhase.checkBlocksAndResolveRequest());
         assertListenerThrows("failed to timeout on retryable block", listener, ClusterBlockException.class);
 
 
         listener = new PlainActionFuture<>();
         reroutePhase = action.new ReroutePhase(new Request(), listener);
-        assertFalse("primary phase should stop execution on retryable block", reroutePhase.checkBlocks());
+        assertFalse("primary phase should stop execution on retryable block", reroutePhase.checkBlocksAndResolveRequest());
         assertFalse("primary phase should wait on retryable block", listener.isDone());
 
         block = ClusterBlocks.builder()
@@ -239,7 +239,7 @@ public class TransportReplicationActionTests extends ESTestCase {
         PlainActionFuture<Response> listener = new PlainActionFuture<>();
 
         TransportReplicationAction.ReroutePhase reroutePhase = action.new ReroutePhase(request, listener);
-        assertTrue(reroutePhase.checkBlocks());
+        assertTrue(reroutePhase.checkBlocksAndResolveRequest());
         reroutePhase.run();
         assertThat(request.shardId(), equalTo(shardId));
         logger.info("--> primary is assigned to [{}], checking request forwarded", primaryNodeId);
@@ -381,7 +381,7 @@ public class TransportReplicationActionTests extends ESTestCase {
         TransportReplicationAction<Request, Request, Response>.ReplicationPhase replicationPhase =
                 action.new ReplicationPhase(request,
                         new Response(),
-                        request.shardId(), clusterService.state().metaData().index(shardId.getIndex()), createTransportChannel(listener), reference, null);
+                        request.shardId(), createTransportChannel(listener), reference, null);
 
         assertThat(replicationPhase.totalShards(), equalTo(totalShards));
         assertThat(replicationPhase.pending(), equalTo(assignedReplicas));
