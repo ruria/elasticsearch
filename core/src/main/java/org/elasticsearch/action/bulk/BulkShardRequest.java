@@ -41,9 +41,7 @@ public class BulkShardRequest extends ReplicationRequest<BulkShardRequest> {
     }
 
     BulkShardRequest(BulkRequest bulkRequest, ShardId shardId, boolean refresh, BulkItemRequest[] items) {
-        super(bulkRequest);
-        this.index = shardId.getIndex();
-        this.setShardId(shardId);
+        super(bulkRequest, shardId);
         this.items = items;
         this.refresh = refresh;
     }
@@ -96,6 +94,6 @@ public class BulkShardRequest extends ReplicationRequest<BulkShardRequest> {
 
     @Override
     public String toString() {
-        return "shard bulk {" + shardId() + "}";
+        return "shard bulk {" + resolvedShardId() + "}";
     }
 }

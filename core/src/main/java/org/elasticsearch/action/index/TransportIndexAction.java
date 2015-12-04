@@ -128,7 +128,7 @@ public class TransportIndexAction extends TransportReplicationAction<IndexReques
         }
         request.process(metaData, mappingMd, allowIdGeneration, concreteIndex);
         ShardId shardId = clusterService.operationRouting().shardId(clusterService.state(), concreteIndex, request.id(), request.routing());
-        request.setShardId(shardId);
+        request.setResolvedShardId(shardId);
     }
 
     private void innerExecute(final IndexRequest request, final ActionListener<IndexResponse> listener) {
@@ -149,16 +149,16 @@ public class TransportIndexAction extends TransportReplicationAction<IndexReques
     protected Tuple<IndexResponse, IndexRequest> shardOperationOnPrimary(ClusterState clusterState, IndexRequest request) throws Throwable {
 
         // validate, if routing is required, that we got routing
-        IndexMetaData indexMetaData = clusterState.metaData().index(request.shardId().getIndex());
+        IndexMetaData indexMetaData = clusterState.metaData().index(request.resolvedShardId().getIndex());
         MappingMetaData mappingMd = indexMetaData.mappingOrDefault(request.type());
         if (mappingMd != null && mappingMd.routing().required()) {
             if (request.routing() == null) {
-                throw new RoutingMissingException(request.shardId().getIndex(), request.type(), request.id());
+                throw new RoutingMissingException(request.resolvedShardId().getIndex(), request.type(), request.id());
             }
         }
 
-        IndexService indexService = indicesService.indexServiceSafe(request.shardId().getIndex());
-        IndexShard indexShard = indexService.getShard(request.shardId().id());
+        IndexService indexService = indicesService.indexServiceSafe(request.resolvedShardId().getIndex());
+        IndexShard indexShard = indexService.getShard(request.resolvedShardId().id());
 
         final WriteResult<IndexResponse> result = executeIndexRequestOnPrimary(request, indexShard);
 

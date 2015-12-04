@@ -42,7 +42,12 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
 
     public static final TimeValue DEFAULT_TIMEOUT = new TimeValue(1, TimeUnit.MINUTES);
 
-    ShardId internalShardId;
+    /**
+     * Target shard the request should be executed on. This is resolved by the replication action
+     * before performing any operation for the request in case of index and delete requests. In case of
+     * shard-level bulk, refresh and flush requests, the shard id is resolved at request construction
+     */
+    protected ShardId resolvedShardId;
 
     protected TimeValue timeout = DEFAULT_TIMEOUT;
     protected String index;
@@ -66,7 +71,7 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
     public ReplicationRequest(ActionRequest request, ShardId shardId) {
         super(request);
         this.index = shardId.getIndex();
-        this.internalShardId = shardId;
+        this.resolvedShardId = shardId;
     }
 
     /**
@@ -133,12 +138,12 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
 
     /**
      * @return the shardId of the shard where this operation should be executed on.
-     * can be null in case the shardId is determined by a single document (index, type, id) for example for index or delete request.
+     * can be null if the shardID has not yet been resolved
      */
     public
     @Nullable
-    ShardId shardId() {
-        return internalShardId;
+    ShardId resolvedShardId() {
+        return resolvedShardId;
     }
 
     /**
@@ -163,9 +168,9 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
         if (in.readBoolean()) {
-            internalShardId = ShardId.readShardId(in);
+            resolvedShardId = ShardId.readShardId(in);
         } else {
-            internalShardId = null;
+            resolvedShardId = null;
         }
         consistencyLevel = WriteConsistencyLevel.fromId(in.readByte());
         timeout = TimeValue.readTimeValue(in);
@@ -175,9 +180,9 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        if (internalShardId != null) {
+        if (resolvedShardId != null) {
             out.writeBoolean(true);
-            internalShardId.writeTo(out);
+            resolvedShardId.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
@@ -186,8 +191,12 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
         out.writeString(index);
     }
 
-    public T setShardId(ShardId shardId) {
-        this.internalShardId = shardId;
+    /**
+     * Sets the target shard id for the request. The shard id is set when a index/delete request is resolved
+     * by the replication action
+     */
+    public T setResolvedShardId(ShardId shardId) {
+        this.resolvedShardId = shardId;
         return (T) this;
     }
 }
