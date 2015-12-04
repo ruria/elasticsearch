@@ -93,4 +93,9 @@ public class BulkShardRequest extends ReplicationRequest<BulkShardRequest> {
         }
         refresh = in.readBoolean();
     }
+
+    @Override
+    public String toString() {
+        return "shard bulk {" + shardId() + "}";
+    }
 }

@@ -419,12 +419,12 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                 if (logger.isTraceEnabled()) {
                     logger.trace("send action [{}] on primary [{}] for request [{}] with cluster state version [{}] to [{}] ", transportPrimaryAction, request.shardId(), request, state.version(), primary.currentNodeId());
                 }
-                performAction(primary.currentNodeId(), transportPrimaryAction);
+                performAction(primary.currentNodeId(), transportPrimaryAction, true);
             } else {
                 if (logger.isTraceEnabled()) {
                     logger.trace("send action [{}] on primary [{}] for request [{}] with cluster state version [{} to [{}]]", actionName, request.shardId(), request, state.version(), primary.currentNodeId());
                 }
-                performAction(primary.currentNodeId(), actionName);
+                performAction(primary.currentNodeId(), actionName, false);
             }
         }
 
@@ -463,9 +463,8 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             return true;
         }
 
-        private void performAction(final String nodeId, final String action) {
+        private void performAction(final String nodeId, final String action, final boolean isPrimaryAction) {
             DiscoveryNode node = observer.observedState().nodes().get(nodeId);
-            final boolean isPrimaryAction = action.equals(transportPrimaryAction);
             transportService.sendRequest(node, action, request, transportOptions, new BaseTransportResponseHandler<Response>() {
 
                 @Override
@@ -489,9 +488,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                         // if we got disconnected from the node, or the node / shard is not in the right state (being closed)
                         if (exp.unwrapCause() instanceof ConnectTransportException || exp.unwrapCause() instanceof NodeClosedException ||
                                 (isPrimaryAction && retryPrimaryException(exp.unwrapCause()))) {
-                            // we already marked it as started when we executed it (removed the listener) so pass false
-                            // to re-add to the cluster listener
-                            logger.trace("received an error from node the primary was assigned to ({}), scheduling a retry", exp.getMessage());
+                            logger.trace("received an error from node [{}] for request [{}], scheduling a retry", exp, nodeId, request);
                             retry(exp);
                         } else {
                             finishAsFailed(exp);
@@ -601,16 +598,15 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                 if (logger.isTraceEnabled()) {
                     logger.trace("action [{}] completed on shard [{}] for request [{}] with cluster state version [{}]", transportPrimaryAction, shardId, request, state.version());
                 }
-                replicationPhase = new ReplicationPhase(primaryResponse.v2(), primaryResponse.v1(), request.shardId(),
-                        channel, indexShardReference, shardFailedTimeout);
+                replicationPhase = new ReplicationPhase(primaryResponse.v2(), primaryResponse.v1(), shardId, channel, indexShardReference, shardFailedTimeout);
             } catch (Throwable e) {
                 if (ExceptionsHelper.status(e) == RestStatus.CONFLICT) {
                     if (logger.isTraceEnabled()) {
-                        logger.trace("Failed to execute [{}]", e, request);
+                        logger.trace("failed to execute [{}] on [{}]", e, request, shardId);
                     }
                 } else {
                     if (logger.isDebugEnabled()) {
-                        logger.debug("Failed to execute [{}]", e, request);
+                        logger.debug("failed to execute [{}] on [{}]", e, request, shardId);
                     }
                 }
                 finishAsFailed(e);
