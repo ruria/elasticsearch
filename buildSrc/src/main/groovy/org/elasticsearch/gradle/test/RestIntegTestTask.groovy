@@ -58,6 +58,7 @@ class RestIntegTestTask extends RandomizedTestingTask {
             integTest.testClassesDir = test.testClassesDir
             integTest.mustRunAfter(test)
         }
+        integTest.mustRunAfter(project.precommit)
         project.check.dependsOn(integTest)
         RestSpecHack.configureDependencies(project)
         project.afterEvaluate {
@@ -67,7 +68,9 @@ class RestIntegTestTask extends RandomizedTestingTask {
     }
 
     RestIntegTestTask() {
-        project.afterEvaluate {
+        // this must run after all projects have been configured, so we know any project
+        // references can be accessed as a fully configured
+        project.gradle.projectsEvaluated {
             Task test = project.tasks.findByName('test')
             if (test != null) {
                 mustRunAfter(test)
@@ -75,7 +78,7 @@ class RestIntegTestTask extends RandomizedTestingTask {
             ClusterFormationTasks.setup(project, this, clusterConfig)
             configure {
                 parallelism '1'
-                systemProperty 'tests.cluster', "localhost:${clusterConfig.transportPort}"
+                systemProperty 'tests.cluster', "localhost:${clusterConfig.baseTransportPort}"
             }
         }
     }

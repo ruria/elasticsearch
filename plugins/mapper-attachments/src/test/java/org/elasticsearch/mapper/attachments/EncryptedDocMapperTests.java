@@ -43,7 +43,6 @@ public class EncryptedDocMapperTests extends AttachmentUnitTestCase {
 
     public void testMultipleDocsEncryptedLast() throws IOException {
         DocumentMapperParser mapperParser = MapperTestUtils.newMapperService(createTempDir(), Settings.EMPTY).documentMapperParser();
-        mapperParser.putTypeParser(AttachmentMapper.CONTENT_TYPE, new AttachmentMapper.TypeParser());
 
         String mapping = copyToStringFromClasspath("/org/elasticsearch/index/mapper/attachment/test/unit/encrypted/test-mapping.json");
         DocumentMapper docMapper = mapperParser.parse(mapping);
@@ -61,8 +60,8 @@ public class EncryptedDocMapperTests extends AttachmentUnitTestCase {
         assertThat(doc.get(docMapper.mappers().getMapper("file1.title").fieldType().names().indexName()), equalTo("Hello"));
         assertThat(doc.get(docMapper.mappers().getMapper("file1.author").fieldType().names().indexName()), equalTo("kimchy"));
         assertThat(doc.get(docMapper.mappers().getMapper("file1.keywords").fieldType().names().indexName()), equalTo("elasticsearch,cool,bonsai"));
-        assertThat(doc.get(docMapper.mappers().getMapper("file1.content_type").fieldType().names().indexName()), equalTo("text/html; charset=ISO-8859-1"));
-        assertThat(doc.getField(docMapper.mappers().getMapper("file1.content_length").fieldType().names().indexName()).numericValue().longValue(), is(344L));
+        assertThat(doc.get(docMapper.mappers().getMapper("file1.content_type").fieldType().names().indexName()), startsWith("text/html;"));
+        assertThat(doc.getField(docMapper.mappers().getMapper("file1.content_length").fieldType().names().indexName()).numericValue().longValue(), greaterThan(0L));
 
         assertThat(doc.get(docMapper.mappers().getMapper("file2").fieldType().names().indexName()), nullValue());
         assertThat(doc.get(docMapper.mappers().getMapper("file2.title").fieldType().names().indexName()), nullValue());
@@ -74,8 +73,6 @@ public class EncryptedDocMapperTests extends AttachmentUnitTestCase {
 
     public void testMultipleDocsEncryptedFirst() throws IOException {
         DocumentMapperParser mapperParser = MapperTestUtils.newMapperService(createTempDir(), Settings.EMPTY).documentMapperParser();
-        mapperParser.putTypeParser(AttachmentMapper.CONTENT_TYPE, new AttachmentMapper.TypeParser());
-
         String mapping = copyToStringFromClasspath("/org/elasticsearch/index/mapper/attachment/test/unit/encrypted/test-mapping.json");
         DocumentMapper docMapper = mapperParser.parse(mapping);
         byte[] html = copyToBytesFromClasspath("/org/elasticsearch/index/mapper/attachment/test/sample-files/htmlWithValidDateMeta.html");
@@ -99,8 +96,8 @@ public class EncryptedDocMapperTests extends AttachmentUnitTestCase {
         assertThat(doc.get(docMapper.mappers().getMapper("file2.title").fieldType().names().indexName()), equalTo("Hello"));
         assertThat(doc.get(docMapper.mappers().getMapper("file2.author").fieldType().names().indexName()), equalTo("kimchy"));
         assertThat(doc.get(docMapper.mappers().getMapper("file2.keywords").fieldType().names().indexName()), equalTo("elasticsearch,cool,bonsai"));
-        assertThat(doc.get(docMapper.mappers().getMapper("file2.content_type").fieldType().names().indexName()), equalTo("text/html; charset=ISO-8859-1"));
-        assertThat(doc.getField(docMapper.mappers().getMapper("file2.content_length").fieldType().names().indexName()).numericValue().longValue(), is(344L));
+        assertThat(doc.get(docMapper.mappers().getMapper("file2.content_type").fieldType().names().indexName()), startsWith("text/html;"));
+        assertThat(doc.getField(docMapper.mappers().getMapper("file2.content_length").fieldType().names().indexName()).numericValue().longValue(), greaterThan(0L));
     }
 
     public void testMultipleDocsEncryptedNotIgnoringErrors() throws IOException {
@@ -109,7 +106,6 @@ public class EncryptedDocMapperTests extends AttachmentUnitTestCase {
                 Settings.builder()
                     .put("index.mapping.attachment.ignore_errors", false)
                     .build()).documentMapperParser();
-            mapperParser.putTypeParser(AttachmentMapper.CONTENT_TYPE, new AttachmentMapper.TypeParser());
 
             String mapping = copyToStringFromClasspath("/org/elasticsearch/index/mapper/attachment/test/unit/encrypted/test-mapping.json");
             DocumentMapper docMapper = mapperParser.parse(mapping);

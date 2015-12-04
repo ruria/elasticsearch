@@ -49,7 +49,6 @@ public class VariousDocTests extends AttachmentUnitTestCase {
     @Before
     public void createMapper() throws IOException {
         DocumentMapperParser mapperParser = MapperTestUtils.newMapperService(createTempDir(), Settings.EMPTY).documentMapperParser();
-        mapperParser.putTypeParser(AttachmentMapper.CONTENT_TYPE, new AttachmentMapper.TypeParser());
 
         String mapping = copyToStringFromClasspath("/org/elasticsearch/index/mapper/attachment/test/unit/various-doc/test-mapping.json");
         docMapper = mapperParser.parse(mapping);
@@ -68,8 +67,6 @@ public class VariousDocTests extends AttachmentUnitTestCase {
      */
     public void testEncryptedPDFDocument() throws Exception {
         assertException("encrypted.pdf", "is encrypted");
-        // TODO Remove when this will be fixed in Tika. See https://issues.apache.org/jira/browse/TIKA-1548
-        System.clearProperty("sun.font.fontmanager");
         testMapper("encrypted.pdf", true);
     }
 

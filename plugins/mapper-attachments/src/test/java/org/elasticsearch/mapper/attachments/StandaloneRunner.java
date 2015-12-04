@@ -20,6 +20,7 @@
 package org.elasticsearch.mapper.attachments;
 
 import org.apache.commons.cli.CommandLine;
+import org.elasticsearch.common.SuppressForbidden;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.cli.CliTool;
 import org.elasticsearch.common.cli.CliToolConfig;
@@ -59,6 +60,7 @@ import static org.elasticsearch.test.StreamsUtils.copyToStringFromClasspath;
  *  StandaloneRunner -u /tmp/mydoc.pdf
  *  StandaloneRunner -u /tmp/mydoc.pdf --size 1000000
  */
+@SuppressForbidden(reason = "commandline tool")
 public class StandaloneRunner extends CliTool {
 
     private static final CliToolConfig CONFIG = CliToolConfig.config("tika", StandaloneRunner.class)
@@ -87,7 +89,6 @@ public class StandaloneRunner extends CliTool {
             this.url = url;
             this.base64text = base64text;
             DocumentMapperParser mapperParser = MapperTestUtils.newMapperService(PathUtils.get("."), Settings.EMPTY).documentMapperParser(); // use CWD b/c it won't be used
-            mapperParser.putTypeParser(AttachmentMapper.CONTENT_TYPE, new AttachmentMapper.TypeParser());
 
             String mapping = copyToStringFromClasspath("/org/elasticsearch/index/mapper/attachment/test/standalone/standalone-mapping.json");
             docMapper = mapperParser.parse(mapping);
