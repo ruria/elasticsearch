@@ -51,6 +51,7 @@ import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.test.ESTestCase;
 import org.elasticsearch.test.cluster.TestClusterService;
+import org.elasticsearch.test.junit.annotations.TestLogging;
 import org.elasticsearch.test.transport.CapturingTransport;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.*;
@@ -225,6 +226,7 @@ public class TransportReplicationActionTests extends ESTestCase {
         assertIndexShardUninitialized();
     }
 
+    @TestLogging("_root:TRACE")
     public void testRoutingToPrimary() {
         final String index = "test";
         final ShardId shardId = new ShardId(index, 0);
