@@ -78,8 +78,8 @@ public class TransportMultiTermVectorsAction extends HandledTransportAction<Mult
                         new IllegalArgumentException("routing is required for [" + concreteSingleIndex + "]/[" + termVectorsRequest.type() + "]/[" + termVectorsRequest.id() + "]"))));
                 continue;
             }
-            ShardId shardId = clusterService.operationRouting().getShards(clusterState, concreteSingleIndex,
-                    termVectorsRequest.id(), termVectorsRequest.routing(), null).shardId();
+            ShardId shardId = clusterService.operationRouting().shardId(clusterState, concreteSingleIndex,
+                    termVectorsRequest.id(), termVectorsRequest.routing());
             MultiTermVectorsShardRequest shardRequest = shardRequests.get(shardId);
             if (shardRequest == null) {
                 shardRequest = new MultiTermVectorsShardRequest(request, shardId.index().name(), shardId.id());

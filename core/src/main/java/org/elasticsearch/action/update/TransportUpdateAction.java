@@ -148,7 +148,7 @@ public class TransportUpdateAction extends TransportInstanceSingleOperationActio
             return clusterState.routingTable().index(request.concreteIndex()).shard(request.shardId()).primaryShardIt();
         }
         ShardIterator shardIterator = clusterService.operationRouting()
-                .indexShards(clusterState, request.concreteIndex(), request.id(), request.routing());
+                .indexShards(clusterState, request.concreteIndex(), request.type(), request.id(), request.routing());
         ShardRouting shard;
         while ((shard = shardIterator.nextOrNull()) != null) {
             if (shard.primary()) {

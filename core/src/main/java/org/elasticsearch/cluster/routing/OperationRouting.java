@@ -53,7 +53,7 @@ public class OperationRouting extends AbstractComponent {
         this.awarenessAllocationDecider = awarenessAllocationDecider;
     }
 
-    public ShardIterator indexShards(ClusterState clusterState, String index, String id, @Nullable String routing) {
+    public ShardIterator indexShards(ClusterState clusterState, String index, String type, String id, @Nullable String routing) {
         return shards(clusterState, index, id, routing).shardsIt();
     }
 
