@@ -43,7 +43,7 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
     public static final TimeValue DEFAULT_TIMEOUT = new TimeValue(1, TimeUnit.MINUTES);
 
     /**
-     * Target shard the request should be executed on. This is resolved by the replication action
+     * Target shard the request should execute on. This is resolved by the replication action
      * before performing any operation for the request in case of index and delete requests. In case of
      * shard-level bulk, refresh and flush requests, the shard id is resolved at request construction
      */

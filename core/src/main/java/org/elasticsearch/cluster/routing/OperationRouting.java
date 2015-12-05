@@ -57,7 +57,7 @@ public class OperationRouting extends AbstractComponent {
         return shards(clusterState, index, id, routing).shardsIt();
     }
 
-    public ShardIterator getShards(ClusterState clusterState, String index, String id, @Nullable String routing, @Nullable String preference) {
+    public ShardIterator getShards(ClusterState clusterState, String index, String type, String id, @Nullable String routing, @Nullable String preference) {
         return preferenceActiveShardIterator(shards(clusterState, index, id, routing), clusterState.nodes().localNodeId(), clusterState.nodes(), preference);
     }
 
