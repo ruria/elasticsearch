@@ -402,7 +402,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                 return;
             }
             final ClusterState state = observer.observedState();
-            IndexShardRoutingTable indexShard = clusterService.operationRouting().shards(state, request.resolvedShardId().getIndex(), request.resolvedShardId().id());
+            IndexShardRoutingTable indexShard = state.getRoutingTable().shardRoutingTable(request.resolvedShardId().getIndex(), request.resolvedShardId().id());
             final ShardRouting primary = indexShard.primaryShard();
             if (primary == null || primary.active() == false) {
                 logger.trace("primary shard [{}] is not yet active, scheduling a retry: action [{}], request [{}], cluster state version [{}]", request.resolvedShardId(), actionName, request, state.version());
@@ -742,10 +742,14 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             final IndexRoutingTable index = state.getRoutingTable().index(shardId.getIndex());
             final IndexShardRoutingTable shardRoutingTable = (index != null) ? index.shard(shardId.id()) : null;
             final IndexMetaData indexMetaData = state.getMetaData().index(shardId.getIndex());
-            this.shards = (shardRoutingTable != null) ? shardRoutingTable.shards() : Collections.emptyList();
+            this.shards = (shardRoutingTable != null) ? shardRoutingTable.shards() : Collections.EMPTY_LIST;
             this.executeOnReplica = (indexMetaData == null) || shouldExecuteReplication(indexMetaData.getSettings());
             this.indexUUID = (indexMetaData != null) ? indexMetaData.getIndexUUID() : null;
             this.nodes = state.getNodes();
+
+            if (shards == Collections.EMPTY_LIST) {
+                logger.debug("replication phase for request [{}] on [{}] is skipped due to index deletion after primary operation", replicaRequest, shardId);
+            }
 
             // we calculate number of target nodes to send replication operations, including nodes with relocating shards
             int numberOfIgnoredShardInstances = 0;
@@ -759,7 +763,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                     if (shard.currentNodeId().equals(nodes.localNodeId()) == false) {
                         numberOfPendingShardInstances++;
                     }
-                    if (shard.relocating() && shard.relocatingNodeId().equals(nodes.localNodeId()) == false) {
+                    if (shard.relocating()) {
                         numberOfPendingShardInstances++;
                     }
                 }
@@ -833,8 +837,8 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                 if (nodes.localNodeId().equals(shard.currentNodeId()) == false) {
                     performOnReplica(shard, shard.currentNodeId());
                 }
-                // send operation to relocating shard if not local
-                if (shard.relocating() &&  nodes.localNodeId().equals(shard.relocatingNodeId()) == false) {
+                // send operation to relocating shard
+                if (shard.relocating()) {
                     performOnReplica(shard, shard.relocatingNodeId());
                 }
             }

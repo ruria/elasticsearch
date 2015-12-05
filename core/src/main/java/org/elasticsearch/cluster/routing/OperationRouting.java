@@ -62,7 +62,8 @@ public class OperationRouting extends AbstractComponent {
     }
 
     public ShardIterator getShards(ClusterState clusterState, String index, int shardId, @Nullable String preference) {
-        return preferenceActiveShardIterator(shards(clusterState, index, shardId), clusterState.nodes().localNodeId(), clusterState.nodes(), preference);
+        final IndexShardRoutingTable indexShard = clusterState.getRoutingTable().shardRoutingTable(index, shardId);
+        return preferenceActiveShardIterator(indexShard, clusterState.nodes().localNodeId(), clusterState.nodes(), preference);
     }
 
     public GroupShardsIterator broadcastDeleteShards(ClusterState clusterState, String index) {
@@ -195,14 +196,6 @@ public class OperationRouting extends AbstractComponent {
         }
     }
 
-    public IndexMetaData indexMetaData(ClusterState clusterState, String index) {
-        IndexMetaData indexMetaData = clusterState.metaData().index(index);
-        if (indexMetaData == null) {
-            throw new IndexNotFoundException(index);
-        }
-        return indexMetaData;
-    }
-
     protected IndexRoutingTable indexRoutingTable(ClusterState clusterState, String index) {
         IndexRoutingTable indexRouting = clusterState.routingTable().index(index);
         if (indexRouting == null) {
@@ -216,15 +209,7 @@ public class OperationRouting extends AbstractComponent {
 
     protected IndexShardRoutingTable shards(ClusterState clusterState, String index, String id, String routing) {
         int shardId = generateShardId(clusterState, index, id, routing);
-        return shards(clusterState, index, shardId);
-    }
-
-    public IndexShardRoutingTable shards(ClusterState clusterState, String index, int shardId) {
-        IndexShardRoutingTable indexShard = indexRoutingTable(clusterState, index).shard(shardId);
-        if (indexShard == null) {
-            throw new ShardNotFoundException(new ShardId(index, shardId));
-        }
-        return indexShard;
+        return clusterState.getRoutingTable().shardRoutingTable(index, shardId);
     }
 
     public ShardId shardId(ClusterState clusterState, String index, String id, @Nullable String routing) {
@@ -232,7 +217,10 @@ public class OperationRouting extends AbstractComponent {
     }
 
     private int generateShardId(ClusterState clusterState, String index, String id, @Nullable String routing) {
-        final IndexMetaData indexMetaData = indexMetaData(clusterState, index);
+        IndexMetaData indexMetaData = clusterState.metaData().index(index);
+        if (indexMetaData == null) {
+            throw new IndexNotFoundException(index);
+        }
         final int hash;
         if (routing == null) {
             hash = Murmur3HashFunction.hash(id);
