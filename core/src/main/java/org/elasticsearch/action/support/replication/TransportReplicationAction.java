@@ -742,12 +742,12 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             final IndexRoutingTable index = state.getRoutingTable().index(shardId.getIndex());
             final IndexShardRoutingTable shardRoutingTable = (index != null) ? index.shard(shardId.id()) : null;
             final IndexMetaData indexMetaData = state.getMetaData().index(shardId.getIndex());
-            this.shards = (shardRoutingTable != null) ? shardRoutingTable.shards() : Collections.EMPTY_LIST;
+            this.shards = (shardRoutingTable != null) ? shardRoutingTable.shards() : Collections.emptyList();
             this.executeOnReplica = (indexMetaData == null) || shouldExecuteReplication(indexMetaData.getSettings());
             this.indexUUID = (indexMetaData != null) ? indexMetaData.getIndexUUID() : null;
             this.nodes = state.getNodes();
 
-            if (shards == Collections.EMPTY_LIST) {
+            if (shards.isEmpty()) {
                 logger.debug("replication phase for request [{}] on [{}] is skipped due to index deletion after primary operation", replicaRequest, shardId);
             }
 
