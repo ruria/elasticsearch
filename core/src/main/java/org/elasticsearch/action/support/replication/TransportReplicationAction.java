@@ -555,7 +555,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
         }
 
         void retryBecauseUnavailable(ShardId shardId, String message) {
-            retry(new UnavailableShardsException(shardId, message + " Timeout: [{}], request: [{}]", request.timeout(), request));
+            retry(new UnavailableShardsException(shardId, "{} Timeout: [{}], request: [{}]", message, request.timeout(), request));
         }
     }
 
@@ -693,7 +693,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
         }
 
         void finishBecauseUnavailable(ShardId shardId, String message) {
-            finishAsFailed(new UnavailableShardsException(shardId, message + " Timeout: [{}], request: [{}]", request.timeout(), request));
+            finishAsFailed(new UnavailableShardsException(shardId, "{} Timeout: [{}], request: [{}]", message, request.timeout(), request));
         }
     }
 
