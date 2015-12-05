@@ -43,9 +43,9 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
     public static final TimeValue DEFAULT_TIMEOUT = new TimeValue(1, TimeUnit.MINUTES);
 
     /**
-     * Target shard the request should execute on. This is resolved by the replication action
-     * before performing any operation for the request in case of index and delete requests. In case of
-     * shard-level bulk, refresh and flush requests, the shard id is resolved at request construction
+     * Target shard the request should execute on. In case of index and delete requests,
+     * shard id gets resolved by the transport action before performing request operation
+     * and at request creation time for shard-level bulk, refresh and flush requests.
      */
     protected ShardId resolvedShardId;
 
@@ -192,8 +192,8 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
     }
 
     /**
-     * Sets the target shard id for the request. The shard id is set when a index/delete request is resolved
-     * by the replication action
+     * Sets the target shard id for the request. The shard id is set when a
+     * index/delete request is resolved by the transport action
      */
     public T setResolvedShardId(ShardId shardId) {
         this.resolvedShardId = shardId;
