@@ -45,9 +45,11 @@ import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.lease.Releasable;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.index.shard.IndexShardNotStartedException;
 import org.elasticsearch.index.shard.IndexShardState;
 import org.elasticsearch.index.shard.ShardId;
+import org.elasticsearch.index.shard.ShardNotFoundException;
 import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.test.ESTestCase;
 import org.elasticsearch.test.cluster.TestClusterService;
@@ -190,46 +192,29 @@ public class TransportReplicationActionTests extends ESTestCase {
         assertIndexShardCounter(1);
     }
 
-    public void testPrimaryAction() throws InterruptedException, ExecutionException {
+    public void testUnknownIndexOrShardOnReroute() throws InterruptedException {
         final String index = "test";
-        final ShardId shardId = new ShardId(index, 0);
-
-        clusterService.setState(state(index, true, ShardRoutingState.STARTED, ShardRoutingState.STARTED));
-        Request request = new Request(shardId).timeout("1ms");
+        // no replicas in oder to skip the replication part
+        clusterService.setState(state(index, true,
+                randomBoolean() ? ShardRoutingState.INITIALIZING : ShardRoutingState.UNASSIGNED));
+        logger.debug("--> using initial state:\n{}", clusterService.state().prettyPrint());
+        Request request = new Request(new ShardId("unknown_index", 0)).timeout("1ms");
         PlainActionFuture<Response> listener = new PlainActionFuture<>();
-        TransportReplicationAction.PrimaryPhase primaryPhase = action.new PrimaryPhase(request, createTransportChannel(listener));
-        // the receiving node for primary action has the primary
-        primaryPhase.run();
-        assertThat("request was not processed on primary", request.processedOnPrimary.get(), equalTo(true));
+        TransportReplicationAction.ReroutePhase reroutePhase = action.new ReroutePhase(request, listener);
+        reroutePhase.run();
+        assertListenerThrows("must throw index not found exception", listener, IndexNotFoundException.class);
+        request = new Request(new ShardId(index, 10)).timeout("1ms");
+        listener = new PlainActionFuture<>();
+        reroutePhase = action.new ReroutePhase(request, listener);
+        reroutePhase.run();
+        assertListenerThrows("must throw shard not found exception", listener, ShardNotFoundException.class);
     }
 
-    public void testRerouteResolve() throws Exception {
-        final String index = "test";
-        final ShardId shardId = new ShardId(index, 0);
-        clusterService.setState(state(index, randomBoolean(), ShardRoutingState.STARTED, ShardRoutingState.STARTED));
-        Request request = new Request(shardId).timeout("1ms");
-        PlainActionFuture<Response> listener = new PlainActionFuture<>();
-        TransportReplicationAction.ReroutePhase primaryPhase = action.new ReroutePhase(request, listener);
-        primaryPhase.run();
-        assertThat(request.resolvedShardId(), equalTo(shardId));
-        final IndexShardRoutingTable shardRoutingTable = clusterService.state().routingTable().index(index).shard(shardId.id());
-        final String primaryNodeId = shardRoutingTable.primaryShard().currentNodeId();
-        final List<CapturingTransport.CapturedRequest> capturedRequests = transport.capturedRequestsByTargetNode().get(primaryNodeId);
-        assertThat(capturedRequests, notNullValue());
-        assertThat(capturedRequests.size(), equalTo(1));
-        if (clusterService.state().nodes().localNodeId().equals(primaryNodeId)) {
-            assertThat(capturedRequests.get(0).action, equalTo("testAction[p]"));
-        } else {
-            assertThat(capturedRequests.get(0).action, equalTo("testAction"));
-        }
-        assertIndexShardUninitialized();
-    }
-
-    public void testRoutingToPrimary() {
+    public void testRoutePhaseExecutesRequest() {
         final String index = "test";
         final ShardId shardId = new ShardId(index, 0);
 
-        clusterService.setState(state(index, true, ShardRoutingState.STARTED, ShardRoutingState.STARTED));
+        clusterService.setState(stateWithStartedPrimary(index, randomBoolean(), 3));
 
         logger.debug("using state: \n{}", clusterService.state().prettyPrint());
 
@@ -246,8 +231,119 @@ public class TransportReplicationActionTests extends ESTestCase {
         final List<CapturingTransport.CapturedRequest> capturedRequests = transport.capturedRequestsByTargetNode().get(primaryNodeId);
         assertThat(capturedRequests, notNullValue());
         assertThat(capturedRequests.size(), equalTo(1));
-        assertThat(capturedRequests.get(0).action, equalTo("testAction[p]"));
+        if (clusterService.state().nodes().localNodeId().equals(primaryNodeId)) {
+            assertThat(capturedRequests.get(0).action, equalTo("testAction[p]"));
+        } else {
+            assertThat(capturedRequests.get(0).action, equalTo("testAction"));
+        }
         assertIndexShardUninitialized();
+    }
+
+    public void testPrimaryPhaseExecutesRequest() throws InterruptedException, ExecutionException {
+        final String index = "test";
+        final ShardId shardId = new ShardId(index, 0);
+        clusterService.setState(state(index, true, ShardRoutingState.STARTED, ShardRoutingState.STARTED));
+        Request request = new Request(shardId).timeout("1ms");
+        PlainActionFuture<Response> listener = new PlainActionFuture<>();
+        TransportReplicationAction.PrimaryPhase primaryPhase = action.new PrimaryPhase(request, createTransportChannel(listener));
+        primaryPhase.run();
+        assertThat("request was not processed on primary", request.processedOnPrimary.get(), equalTo(true));
+        final String replicaNodeId = clusterService.state().getRoutingTable().shardRoutingTable(index, shardId.id()).replicaShards().get(0).currentNodeId();
+        final List<CapturingTransport.CapturedRequest> requests = transport.capturedRequestsByTargetNode().get(replicaNodeId);
+        assertThat(requests, notNullValue());
+        assertThat(requests.size(), equalTo(1));
+        assertThat("replica request was not sent", requests.get(0).action, equalTo("testAction[r]"));
+    }
+
+    public void testAddedReplicaAfterPrimaryOperation() {
+        final String index = "test";
+        final ShardId shardId = new ShardId(index, 0);
+        // start with no replicas
+        clusterService.setState(stateWithStartedPrimary(index, true, 0));
+        logger.debug("--> using initial state:\n{}", clusterService.state().prettyPrint());
+        final ClusterState stateWithAddedReplicas = state(index, true, ShardRoutingState.STARTED, randomBoolean() ? ShardRoutingState.INITIALIZING : ShardRoutingState.STARTED);
+
+        final Action actionWithAddedReplicaAfterPrimaryOp = new Action(Settings.EMPTY, "testAction", transportService, clusterService, threadPool) {
+            @Override
+            protected Tuple<Response, Request> shardOperationOnPrimary(ClusterState clusterState, Request shardRequest) throws Throwable {
+                final Tuple<Response, Request> operationOnPrimary = super.shardOperationOnPrimary(clusterState, shardRequest);
+                // add replicas after primary operation
+                ((TestClusterService) clusterService).setState(stateWithAddedReplicas);
+                logger.debug("--> state after primary operation:\n{}", clusterService.state().prettyPrint());
+                return operationOnPrimary;
+            }
+        };
+
+        Request request = new Request(shardId);
+        PlainActionFuture<Response> listener = new PlainActionFuture<>();
+        TransportReplicationAction<Request, Request, Response>.PrimaryPhase primaryPhase = actionWithAddedReplicaAfterPrimaryOp.new PrimaryPhase(request, createTransportChannel(listener));
+        primaryPhase.run();
+        assertThat("request was not processed on primary", request.processedOnPrimary.get(), equalTo(true));
+        for (ShardRouting replica : stateWithAddedReplicas.getRoutingTable().shardRoutingTable(index, shardId.id()).replicaShards()) {
+            List<CapturingTransport.CapturedRequest> requests = transport.capturedRequestsByTargetNode().get(replica.currentNodeId());
+            assertThat(requests, notNullValue());
+            assertThat(requests.size(), equalTo(1));
+            assertThat("replica request was not sent", requests.get(0).action, equalTo("testAction[r]"));
+        }
+    }
+
+    public void testRelocatingReplicaAfterPrimaryOperation() {
+        final String index = "test";
+        final ShardId shardId = new ShardId(index, 0);
+        // start with a replica
+        clusterService.setState(state(index, true, ShardRoutingState.STARTED,  randomBoolean() ? ShardRoutingState.INITIALIZING : ShardRoutingState.STARTED));
+        logger.debug("--> using initial state:\n{}", clusterService.state().prettyPrint());
+        final ClusterState stateWithRelocatingReplica = state(index, true, ShardRoutingState.STARTED, ShardRoutingState.RELOCATING);
+
+        final Action actionWithRelocatingReplicasAfterPrimaryOp = new Action(Settings.EMPTY, "testAction", transportService, clusterService, threadPool) {
+            @Override
+            protected Tuple<Response, Request> shardOperationOnPrimary(ClusterState clusterState, Request shardRequest) throws Throwable {
+                final Tuple<Response, Request> operationOnPrimary = super.shardOperationOnPrimary(clusterState, shardRequest);
+                // set replica to relocating
+                ((TestClusterService) clusterService).setState(stateWithRelocatingReplica);
+                logger.debug("--> state after primary operation:\n{}", clusterService.state().prettyPrint());
+                return operationOnPrimary;
+            }
+        };
+
+        Request request = new Request(shardId);
+        PlainActionFuture<Response> listener = new PlainActionFuture<>();
+        TransportReplicationAction<Request, Request, Response>.PrimaryPhase primaryPhase = actionWithRelocatingReplicasAfterPrimaryOp.new PrimaryPhase(request, createTransportChannel(listener));
+        primaryPhase.run();
+        assertThat("request was not processed on primary", request.processedOnPrimary.get(), equalTo(true));
+        ShardRouting relocatingReplicaShard = stateWithRelocatingReplica.getRoutingTable().shardRoutingTable(index, shardId.id()).replicaShards().get(0);
+        for (String node : new String[] {relocatingReplicaShard.currentNodeId(), relocatingReplicaShard.relocatingNodeId()}) {
+            List<CapturingTransport.CapturedRequest> requests = transport.capturedRequestsByTargetNode().get(node);
+            assertThat(requests, notNullValue());
+            assertThat(requests.size(), equalTo(1));
+            assertThat("replica request was not sent to replica", requests.get(0).action, equalTo("testAction[r]"));
+        }
+    }
+
+    public void testIndexDeletedAfterPrimaryOperation() {
+        final String index = "test";
+        final ShardId shardId = new ShardId(index, 0);
+        clusterService.setState(state(index, true, ShardRoutingState.STARTED, ShardRoutingState.STARTED));
+        logger.debug("--> using initial state:\n{}", clusterService.state().prettyPrint());
+        final ClusterState stateWithDeletedIndex = state(index + "_new", true, ShardRoutingState.STARTED, ShardRoutingState.RELOCATING);
+
+        final Action actionWithDeletedIndexAfterPrimaryOp = new Action(Settings.EMPTY, "testAction", transportService, clusterService, threadPool) {
+            @Override
+            protected Tuple<Response, Request> shardOperationOnPrimary(ClusterState clusterState, Request shardRequest) throws Throwable {
+                final Tuple<Response, Request> operationOnPrimary = super.shardOperationOnPrimary(clusterState, shardRequest);
+                // delete index after primary op
+                ((TestClusterService) clusterService).setState(stateWithDeletedIndex);
+                logger.debug("--> state after primary operation:\n{}", clusterService.state().prettyPrint());
+                return operationOnPrimary;
+            }
+        };
+
+        Request request = new Request(shardId);
+        PlainActionFuture<Response> listener = new PlainActionFuture<>();
+        TransportReplicationAction<Request, Request, Response>.PrimaryPhase primaryPhase = actionWithDeletedIndexAfterPrimaryOp.new PrimaryPhase(request, createTransportChannel(listener));
+        primaryPhase.run();
+        assertThat("request was not processed on primary", request.processedOnPrimary.get(), equalTo(true));
+        assertThat("replication phase should be skipped if index gets deleted after primary operation", transport.capturedRequestsByTargetNode().size(), equalTo(0));
     }
 
     public void testWriteConsistency() throws ExecutionException, InterruptedException {

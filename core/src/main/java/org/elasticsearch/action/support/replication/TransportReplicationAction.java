@@ -725,8 +725,8 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
         private final Releasable indexShardReference;
         private final TimeValue shardFailedTimeout;
 
-        public ReplicationPhase(ReplicaRequest replicaRequest, Response finalResponse, ShardId shardId, TransportChannel channel,
-                                Releasable indexShardReference, TimeValue shardFailedTimeout) {
+        public ReplicationPhase(ReplicaRequest replicaRequest, Response finalResponse, ShardId shardId,
+                                TransportChannel channel, Releasable indexShardReference, TimeValue shardFailedTimeout) {
             this.replicaRequest = replicaRequest;
             this.channel = channel;
             this.finalResponse = finalResponse;
