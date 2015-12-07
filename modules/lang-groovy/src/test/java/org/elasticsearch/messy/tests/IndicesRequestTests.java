@@ -344,7 +344,7 @@ public class IndicesRequestTests extends ESIntegTestCase {
     }
 
     public void testFlush() {
-        String[] indexShardActions = new String[]{TransportShardFlushAction.NAME + "[r]", TransportShardFlushAction.NAME + "[p]"};
+        String[] indexShardActions = new String[]{TransportShardFlushAction.NAME, TransportShardFlushAction.NAME + "[r]", TransportShardFlushAction.NAME + "[p]"};
         interceptTransportActions(indexShardActions);
 
         FlushRequest flushRequest = new FlushRequest(randomIndicesOrAliases());
@@ -367,7 +367,7 @@ public class IndicesRequestTests extends ESIntegTestCase {
     }
 
     public void testRefresh() {
-        String[] indexShardActions = new String[]{TransportShardRefreshAction.NAME + "[r]", TransportShardRefreshAction.NAME + "[p]"};
+        String[] indexShardActions = new String[]{TransportShardRefreshAction.NAME, TransportShardRefreshAction.NAME + "[r]", TransportShardRefreshAction.NAME + "[p]"};
         interceptTransportActions(indexShardActions);
 
         RefreshRequest refreshRequest = new RefreshRequest(randomIndicesOrAliases());
