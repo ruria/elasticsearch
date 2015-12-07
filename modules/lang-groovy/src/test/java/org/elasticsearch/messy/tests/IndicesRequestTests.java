@@ -178,7 +178,7 @@ public class IndicesRequestTests extends ESIntegTestCase {
     }
 
     public void testIndex() {
-        String[] indexShardActions = new String[]{IndexAction.NAME + "[p]", IndexAction.NAME + "[r]"};
+        String[] indexShardActions = new String[]{IndexAction.NAME, IndexAction.NAME + "[p]", IndexAction.NAME + "[r]"};
         interceptTransportActions(indexShardActions);
 
         IndexRequest indexRequest = new IndexRequest(randomIndexOrAlias(), "type", "id").source("field", "value");
@@ -189,7 +189,7 @@ public class IndicesRequestTests extends ESIntegTestCase {
     }
 
     public void testDelete() {
-        String[] deleteShardActions = new String[]{DeleteAction.NAME + "[p]", DeleteAction.NAME + "[r]"};
+        String[] deleteShardActions = new String[]{DeleteAction.NAME, DeleteAction.NAME + "[p]", DeleteAction.NAME + "[r]"};
         interceptTransportActions(deleteShardActions);
 
         DeleteRequest deleteRequest = new DeleteRequest(randomIndexOrAlias(), "type", "id");
