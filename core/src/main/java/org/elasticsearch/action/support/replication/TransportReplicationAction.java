@@ -136,6 +136,12 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
     protected abstract Response newResponseInstance();
 
     /**
+     * Resolves the target shard id of the incoming request.
+     * Additional processing or validation of the request should be done here.
+     */
+    protected abstract void resolveRequest(ClusterState state, String concreteIndex, Request request);
+
+    /**
      * Primary operation on node with primary copy
      * @return A tuple containing not null values, as first value the result of the primary operation and as second value
      * the request to be executed on the replica shards.
@@ -147,6 +153,9 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
      */
     protected abstract void shardOperationOnReplica(ReplicaRequest shardRequest);
 
+    /**
+     * True if write consistency should be checked for an implementation
+     */
     protected boolean checkWriteConsistency() {
         return true;
     }
@@ -165,15 +174,12 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
         return ClusterBlockLevel.WRITE;
     }
 
+    /**
+     * True if provided index should be resolved when resolving request
+     */
     protected boolean resolveIndex() {
         return true;
     }
-
-    /**
-     * Resolves the target shard id of the incoming request.
-     * Additional processing or validation of the request should be done here.
-     */
-    protected abstract void resolveRequest(ClusterState state, String concreteIndex, Request request);
 
     protected TransportRequestOptions transportOptions() {
         return TransportRequestOptions.EMPTY;
