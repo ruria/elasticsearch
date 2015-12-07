@@ -34,6 +34,7 @@ import org.elasticsearch.cluster.action.index.MappingUpdatedAction;
 import org.elasticsearch.cluster.action.shard.ShardStateAction;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.metadata.MappingMetaData;
+import org.elasticsearch.cluster.metadata.MetaData;
 import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
@@ -93,11 +94,11 @@ public class TransportDeleteAction extends TransportReplicationAction<DeleteRequ
     }
 
     @Override
-    protected void resolveRequest(final ClusterState state, String concreteIndex, DeleteRequest request) {
-        request.routing(state.metaData().resolveIndexRouting(request.routing(), request.index()));
-        if (state.metaData().hasIndex(concreteIndex)) {
+    protected void resolveRequest(final MetaData metaData, String concreteIndex, DeleteRequest request) {
+        request.routing(metaData.resolveIndexRouting(request.routing(), request.index()));
+        if (metaData.hasIndex(concreteIndex)) {
             // check if routing is required, if so, do a broadcast delete
-            MappingMetaData mappingMd = state.metaData().index(concreteIndex).mappingOrDefault(request.type());
+            MappingMetaData mappingMd = metaData.index(concreteIndex).mappingOrDefault(request.type());
             if (mappingMd != null && mappingMd.routing().required()) {
                 if (request.routing() == null) {
                     if (request.versionType() != VersionType.INTERNAL) {
@@ -123,7 +124,7 @@ public class TransportDeleteAction extends TransportReplicationAction<DeleteRequ
     }
 
     @Override
-    protected Tuple<DeleteResponse, DeleteRequest> shardOperationOnPrimary(ClusterState clusterState, DeleteRequest request) {
+    protected Tuple<DeleteResponse, DeleteRequest> shardOperationOnPrimary(MetaData metaData, DeleteRequest request) {
         IndexShard indexShard = indicesService.indexServiceSafe(request.resolvedShardId().getIndex()).getShard(request.resolvedShardId().id());
         Engine.Delete delete = indexShard.prepareDelete(request.type(), request.id(), request.version(), request.versionType(), Engine.Operation.Origin.PRIMARY);
         indexShard.delete(delete);

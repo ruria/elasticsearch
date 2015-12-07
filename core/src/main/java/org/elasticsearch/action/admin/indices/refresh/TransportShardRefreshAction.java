@@ -24,11 +24,11 @@ import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.replication.ReplicationRequest;
 import org.elasticsearch.action.support.replication.TransportReplicationAction;
 import org.elasticsearch.cluster.ClusterService;
-import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.action.index.MappingUpdatedAction;
 import org.elasticsearch.cluster.action.shard.ShardStateAction;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
+import org.elasticsearch.cluster.metadata.MetaData;
 import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
@@ -60,7 +60,7 @@ public class TransportShardRefreshAction extends TransportReplicationAction<Repl
     }
 
     @Override
-    protected Tuple<ActionWriteResponse, ReplicationRequest> shardOperationOnPrimary(ClusterState clusterState, ReplicationRequest shardRequest) throws Throwable {
+    protected Tuple<ActionWriteResponse, ReplicationRequest> shardOperationOnPrimary(MetaData metaData, ReplicationRequest shardRequest) throws Throwable {
         IndexShard indexShard = indicesService.indexServiceSafe(shardRequest.resolvedShardId().getIndex()).getShard(shardRequest.resolvedShardId().id());
         indexShard.refresh("api");
         logger.trace("{} refresh request executed on primary", indexShard.shardId());
@@ -91,7 +91,7 @@ public class TransportShardRefreshAction extends TransportReplicationAction<Repl
     }
 
     @Override
-    protected void resolveRequest(ClusterState state, String concreteIndex, ReplicationRequest request) {
+    protected void resolveRequest(MetaData metaData, String concreteIndex, ReplicationRequest request) {
         // the request shardID already resolved at request construction
     }
 

@@ -265,8 +265,8 @@ public class TransportReplicationActionTests extends ESTestCase {
 
         final Action actionWithAddedReplicaAfterPrimaryOp = new Action(Settings.EMPTY, "testAction", transportService, clusterService, threadPool) {
             @Override
-            protected Tuple<Response, Request> shardOperationOnPrimary(ClusterState clusterState, Request shardRequest) throws Throwable {
-                final Tuple<Response, Request> operationOnPrimary = super.shardOperationOnPrimary(clusterState, shardRequest);
+            protected Tuple<Response, Request> shardOperationOnPrimary(MetaData metaData, Request shardRequest) throws Throwable {
+                final Tuple<Response, Request> operationOnPrimary = super.shardOperationOnPrimary(metaData, shardRequest);
                 // add replicas after primary operation
                 ((TestClusterService) clusterService).setState(stateWithAddedReplicas);
                 logger.debug("--> state after primary operation:\n{}", clusterService.state().prettyPrint());
@@ -297,8 +297,8 @@ public class TransportReplicationActionTests extends ESTestCase {
 
         final Action actionWithRelocatingReplicasAfterPrimaryOp = new Action(Settings.EMPTY, "testAction", transportService, clusterService, threadPool) {
             @Override
-            protected Tuple<Response, Request> shardOperationOnPrimary(ClusterState clusterState, Request shardRequest) throws Throwable {
-                final Tuple<Response, Request> operationOnPrimary = super.shardOperationOnPrimary(clusterState, shardRequest);
+            protected Tuple<Response, Request> shardOperationOnPrimary(MetaData metaData, Request shardRequest) throws Throwable {
+                final Tuple<Response, Request> operationOnPrimary = super.shardOperationOnPrimary(metaData, shardRequest);
                 // set replica to relocating
                 ((TestClusterService) clusterService).setState(stateWithRelocatingReplica);
                 logger.debug("--> state after primary operation:\n{}", clusterService.state().prettyPrint());
@@ -329,8 +329,8 @@ public class TransportReplicationActionTests extends ESTestCase {
 
         final Action actionWithDeletedIndexAfterPrimaryOp = new Action(Settings.EMPTY, "testAction", transportService, clusterService, threadPool) {
             @Override
-            protected Tuple<Response, Request> shardOperationOnPrimary(ClusterState clusterState, Request shardRequest) throws Throwable {
-                final Tuple<Response, Request> operationOnPrimary = super.shardOperationOnPrimary(clusterState, shardRequest);
+            protected Tuple<Response, Request> shardOperationOnPrimary(MetaData metaData, Request shardRequest) throws Throwable {
+                final Tuple<Response, Request> operationOnPrimary = super.shardOperationOnPrimary(metaData, shardRequest);
                 // delete index after primary op
                 ((TestClusterService) clusterService).setState(stateWithDeletedIndex);
                 logger.debug("--> state after primary operation:\n{}", clusterService.state().prettyPrint());
@@ -727,7 +727,7 @@ public class TransportReplicationActionTests extends ESTestCase {
         }
 
         @Override
-        protected Tuple<Response, Request> shardOperationOnPrimary(ClusterState clusterState, Request shardRequest) throws Throwable {
+        protected Tuple<Response, Request> shardOperationOnPrimary(MetaData metaData, Request shardRequest) throws Throwable {
             boolean executedBefore = shardRequest.processedOnPrimary.getAndSet(true);
             assert executedBefore == false : "request has already been executed on the primary";
             return new Tuple<>(new Response(), shardRequest);
@@ -739,7 +739,7 @@ public class TransportReplicationActionTests extends ESTestCase {
         }
 
         @Override
-        protected void resolveRequest(ClusterState state, String concreteIndex, Request request) {
+        protected void resolveRequest(MetaData metaData, String concreteIndex, Request request) {
         }
 
         @Override
@@ -780,7 +780,7 @@ public class TransportReplicationActionTests extends ESTestCase {
         }
 
         @Override
-        protected Tuple<Response, Request> shardOperationOnPrimary(ClusterState clusterState, Request shardRequest) throws Throwable {
+        protected Tuple<Response, Request> shardOperationOnPrimary(MetaData metaData, Request shardRequest) throws Throwable {
             return throwException(shardRequest.resolvedShardId());
         }
 
@@ -818,7 +818,7 @@ public class TransportReplicationActionTests extends ESTestCase {
         }
 
         @Override
-        protected Tuple<Response, Request> shardOperationOnPrimary(ClusterState clusterState, Request shardRequest) throws Throwable {
+        protected Tuple<Response, Request> shardOperationOnPrimary(MetaData metaData, Request shardRequest) throws Throwable {
             awaitLatch();
             return new Tuple<>(new Response(), shardRequest);
         }

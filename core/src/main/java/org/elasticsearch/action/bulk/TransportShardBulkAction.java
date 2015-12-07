@@ -38,6 +38,7 @@ import org.elasticsearch.cluster.action.index.MappingUpdatedAction;
 import org.elasticsearch.cluster.action.shard.ShardStateAction;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
 import org.elasticsearch.cluster.metadata.MappingMetaData;
+import org.elasticsearch.cluster.metadata.MetaData;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.inject.Inject;
@@ -102,12 +103,12 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
     }
 
     @Override
-    protected void resolveRequest(ClusterState state, String concreteIndex, BulkShardRequest request) {
+    protected void resolveRequest(MetaData metaData, String concreteIndex, BulkShardRequest request) {
         // the request shardID already resolved at request construction
     }
 
     @Override
-    protected Tuple<BulkShardResponse, BulkShardRequest> shardOperationOnPrimary(ClusterState clusterState, BulkShardRequest request) {
+    protected Tuple<BulkShardResponse, BulkShardRequest> shardOperationOnPrimary(MetaData metaData, BulkShardRequest request) {
         final IndexService indexService = indicesService.indexServiceSafe(request.index());
         final IndexShard indexShard = indexService.getShard(request.resolvedShardId().id());
 
@@ -121,7 +122,7 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
                 preVersions[requestIndex] = indexRequest.version();
                 preVersionTypes[requestIndex] = indexRequest.versionType();
                 try {
-                    WriteResult<IndexResponse> result = shardIndexOperation(request, indexRequest, clusterState, indexShard, true);
+                    WriteResult<IndexResponse> result = shardIndexOperation(request, indexRequest, metaData, indexShard, true);
                     location = locationToSync(location, result.location);
                     // add the response
                     IndexResponse indexResponse = result.response();
@@ -193,7 +194,7 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
                 for (int updateAttemptsCount = 0; updateAttemptsCount <= updateRequest.retryOnConflict(); updateAttemptsCount++) {
                     UpdateResult updateResult;
                     try {
-                        updateResult = shardUpdateOperation(clusterState, request, updateRequest, indexShard);
+                        updateResult = shardUpdateOperation(metaData, request, updateRequest, indexShard);
                     } catch (Throwable t) {
                         updateResult = new UpdateResult(null, null, false, t, null);
                     }
@@ -313,11 +314,11 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
         }
     }
 
-    private WriteResult shardIndexOperation(BulkShardRequest request, IndexRequest indexRequest, ClusterState clusterState,
+    private WriteResult shardIndexOperation(BulkShardRequest request, IndexRequest indexRequest, MetaData metaData,
                                             IndexShard indexShard, boolean processed) throws Throwable {
 
         // validate, if routing is required, that we got routing
-        MappingMetaData mappingMd = clusterState.metaData().index(request.index()).mappingOrDefault(indexRequest.type());
+        MappingMetaData mappingMd = metaData.index(request.index()).mappingOrDefault(indexRequest.type());
         if (mappingMd != null && mappingMd.routing().required()) {
             if (indexRequest.routing() == null) {
                 throw new RoutingMissingException(request.index(), indexRequest.type(), indexRequest.id());
@@ -325,7 +326,7 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
         }
 
         if (!processed) {
-            indexRequest.process(clusterState.metaData(), mappingMd, allowIdGeneration, request.index());
+            indexRequest.process(metaData, mappingMd, allowIdGeneration, request.index());
         }
 
         return executeIndexRequestOnPrimary(indexRequest, indexShard);
@@ -397,14 +398,14 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
 
     }
 
-    private UpdateResult shardUpdateOperation(ClusterState clusterState, BulkShardRequest bulkShardRequest, UpdateRequest updateRequest, IndexShard indexShard) {
+    private UpdateResult shardUpdateOperation(MetaData metaData, BulkShardRequest bulkShardRequest, UpdateRequest updateRequest, IndexShard indexShard) {
         UpdateHelper.Result translate = updateHelper.prepare(updateRequest, indexShard);
         switch (translate.operation()) {
             case UPSERT:
             case INDEX:
                 IndexRequest indexRequest = translate.action();
                 try {
-                    WriteResult result = shardIndexOperation(bulkShardRequest, indexRequest, clusterState, indexShard, false);
+                    WriteResult result = shardIndexOperation(bulkShardRequest, indexRequest, metaData, indexShard, false);
                     return new UpdateResult(translate, indexRequest, result);
                 } catch (Throwable t) {
                     t = ExceptionsHelper.unwrapCause(t);

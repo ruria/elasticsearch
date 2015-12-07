@@ -40,6 +40,7 @@ import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
+import org.elasticsearch.cluster.metadata.MetaData;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
 import org.elasticsearch.cluster.routing.*;
@@ -139,14 +140,14 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
      * Resolves the target shard id of the incoming request.
      * Additional processing or validation of the request should be done here.
      */
-    protected abstract void resolveRequest(ClusterState state, String concreteIndex, Request request);
+    protected abstract void resolveRequest(MetaData metaData, String concreteIndex, Request request);
 
     /**
-     * Primary operation on node with primary copy
+     * Primary operation on node with primary copy, the provided metadata should be used for request validation if needed
      * @return A tuple containing not null values, as first value the result of the primary operation and as second value
      * the request to be executed on the replica shards.
      */
-    protected abstract Tuple<Response, ReplicaRequest> shardOperationOnPrimary(ClusterState clusterState, Request shardRequest) throws Throwable;
+    protected abstract Tuple<Response, ReplicaRequest> shardOperationOnPrimary(MetaData metaData, Request shardRequest) throws Throwable;
 
     /**
      * Replica operation on nodes with replica copies
@@ -466,7 +467,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                 return false;
             }
             // request does not have a shardId yet, we need to pass the concrete index to resolve shardId
-            resolveRequest(clusterState, concreteIndex, request);
+            resolveRequest(clusterState.metaData(), concreteIndex, request);
             assert request.resolvedShardId() != null : "request shardId must be set in resolveRequest";
             return true;
         }
@@ -604,7 +605,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             final ReplicationPhase replicationPhase;
             try {
                 indexShardReference = getIndexShardOperationsCounter(shardId);
-                Tuple<Response, ReplicaRequest> primaryResponse = shardOperationOnPrimary(state, request);
+                Tuple<Response, ReplicaRequest> primaryResponse = shardOperationOnPrimary(state.metaData(), request);
                 if (logger.isTraceEnabled()) {
                     logger.trace("action [{}] completed on shard [{}] for request [{}] with cluster state version [{}]", transportPrimaryAction, shardId, request, state.version());
                 }

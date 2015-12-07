@@ -119,9 +119,7 @@ public class TransportIndexAction extends TransportReplicationAction<IndexReques
     }
 
     @Override
-    protected void resolveRequest(ClusterState state, String concreteIndex, IndexRequest request) {
-        MetaData metaData = clusterService.state().metaData();
-
+    protected void resolveRequest(MetaData metaData, String concreteIndex, IndexRequest request) {
         MappingMetaData mappingMd = null;
         if (metaData.hasIndex(concreteIndex)) {
             mappingMd = metaData.index(concreteIndex).mappingOrDefault(request.type());
@@ -141,10 +139,10 @@ public class TransportIndexAction extends TransportReplicationAction<IndexReques
     }
 
     @Override
-    protected Tuple<IndexResponse, IndexRequest> shardOperationOnPrimary(ClusterState clusterState, IndexRequest request) throws Throwable {
+    protected Tuple<IndexResponse, IndexRequest> shardOperationOnPrimary(MetaData metaData, IndexRequest request) throws Throwable {
 
         // validate, if routing is required, that we got routing
-        IndexMetaData indexMetaData = clusterState.metaData().index(request.resolvedShardId().getIndex());
+        IndexMetaData indexMetaData = metaData.index(request.resolvedShardId().getIndex());
         MappingMetaData mappingMd = indexMetaData.mappingOrDefault(request.type());
         if (mappingMd != null && mappingMd.routing().required()) {
             if (request.routing() == null) {
