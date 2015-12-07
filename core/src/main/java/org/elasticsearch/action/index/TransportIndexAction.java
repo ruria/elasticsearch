@@ -136,11 +136,6 @@ public class TransportIndexAction extends TransportReplicationAction<IndexReques
     }
 
     @Override
-    protected boolean checkWriteConsistency() {
-        return true;
-    }
-
-    @Override
     protected IndexResponse newResponseInstance() {
         return new IndexResponse();
     }

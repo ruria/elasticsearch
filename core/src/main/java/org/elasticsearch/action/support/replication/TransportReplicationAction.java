@@ -147,7 +147,9 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
      */
     protected abstract void shardOperationOnReplica(ReplicaRequest shardRequest);
 
-    protected abstract boolean checkWriteConsistency();
+    protected boolean checkWriteConsistency() {
+        return true;
+    }
 
     /**
      * Cluster level block to check before request execution

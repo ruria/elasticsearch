@@ -118,11 +118,6 @@ public class TransportDeleteAction extends TransportReplicationAction<DeleteRequ
     }
 
     @Override
-    protected boolean checkWriteConsistency() {
-        return true;
-    }
-
-    @Override
     protected DeleteResponse newResponseInstance() {
         return new DeleteResponse();
     }

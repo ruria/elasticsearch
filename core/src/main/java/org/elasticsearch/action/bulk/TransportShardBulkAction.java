@@ -87,11 +87,6 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
     }
 
     @Override
-    protected boolean checkWriteConsistency() {
-        return true;
-    }
-
-    @Override
     protected TransportRequestOptions transportOptions() {
         return BulkAction.INSTANCE.transportOptions(settings);
     }
