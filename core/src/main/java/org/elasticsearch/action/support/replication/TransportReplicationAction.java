@@ -145,7 +145,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
     /**
      * Replica operation on nodes with replica copies
      */
-    protected abstract void shardOperationOnReplica(ShardId shardId, ReplicaRequest shardRequest);
+    protected abstract void shardOperationOnReplica(ReplicaRequest shardRequest);
 
     protected abstract boolean checkWriteConsistency();
 
@@ -350,8 +350,9 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
 
         @Override
         protected void doRun() throws Exception {
+            assert request.resolvedShardId() != null : "request shardId must be set";
             try (Releasable shardReference = getIndexShardOperationsCounter(request.resolvedShardId())) {
-                shardOperationOnReplica(request.resolvedShardId(), request);
+                shardOperationOnReplica(request);
                 if (logger.isTraceEnabled()) {
                     logger.trace("action [{}] completed on shard [{}] for request [{}]", transportReplicaAction, request.resolvedShardId(), request);
                 }
@@ -458,7 +459,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             }
             // request does not have a shardId yet, we need to pass the concrete index to resolve shardId
             resolveRequest(clusterState, concreteIndex, request);
-            assert request.resolvedShardId() != null : "request shardID must be set in resolveRequest";
+            assert request.resolvedShardId() != null : "request shardId must be set in resolveRequest";
             return true;
         }
 

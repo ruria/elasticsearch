@@ -144,7 +144,8 @@ public class TransportDeleteAction extends TransportReplicationAction<DeleteRequ
     }
 
     @Override
-    protected void shardOperationOnReplica(ShardId shardId, DeleteRequest request) {
+    protected void shardOperationOnReplica(DeleteRequest request) {
+        final ShardId shardId = request.resolvedShardId();
         IndexShard indexShard = indicesService.indexServiceSafe(shardId.getIndex()).getShard(shardId.id());
         Engine.Delete delete = indexShard.prepareDelete(request.type(), request.id(), request.version(), request.versionType(), Engine.Operation.Origin.REPLICA);
 

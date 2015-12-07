@@ -169,7 +169,8 @@ public class TransportIndexAction extends TransportReplicationAction<IndexReques
     }
 
     @Override
-    protected void shardOperationOnReplica(ShardId shardId, IndexRequest request) {
+    protected void shardOperationOnReplica(IndexRequest request) {
+        final ShardId shardId = request.resolvedShardId();
         IndexService indexService = indicesService.indexServiceSafe(shardId.getIndex());
         IndexShard indexShard = indexService.getShard(shardId.id());
         SourceToParse sourceToParse = SourceToParse.source(SourceToParse.Origin.REPLICA, request.source()).index(shardId.getIndex()).type(request.type()).id(request.id())

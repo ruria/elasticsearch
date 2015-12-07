@@ -734,7 +734,7 @@ public class TransportReplicationActionTests extends ESTestCase {
         }
 
         @Override
-        protected void shardOperationOnReplica(ShardId shardId, Request request) {
+        protected void shardOperationOnReplica(Request request) {
             request.processedOnReplicas.incrementAndGet();
         }
 
@@ -802,7 +802,7 @@ public class TransportReplicationActionTests extends ESTestCase {
         }
 
         @Override
-        protected void shardOperationOnReplica(ShardId shardId, Request shardRequest) {
+        protected void shardOperationOnReplica(Request shardRequest) {
             throwException(shardRequest.resolvedShardId());
         }
     }
@@ -829,7 +829,7 @@ public class TransportReplicationActionTests extends ESTestCase {
         }
 
         @Override
-        protected void shardOperationOnReplica(ShardId shardId, Request shardRequest) {
+        protected void shardOperationOnReplica(Request shardRequest) {
             try {
                 awaitLatch();
             } catch (InterruptedException e) {

@@ -443,7 +443,8 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
 
 
     @Override
-    protected void shardOperationOnReplica(ShardId shardId, BulkShardRequest request) {
+    protected void shardOperationOnReplica(BulkShardRequest request) {
+        final ShardId shardId = request.resolvedShardId();
         IndexService indexService = indicesService.indexServiceSafe(shardId.getIndex());
         IndexShard indexShard = indexService.getShard(shardId.id());
         Translog.Location location = null;

@@ -68,7 +68,8 @@ public class TransportShardRefreshAction extends TransportReplicationAction<Repl
     }
 
     @Override
-    protected void shardOperationOnReplica(ShardId shardId, ReplicationRequest request) {
+    protected void shardOperationOnReplica(ReplicationRequest request) {
+        final ShardId shardId = request.resolvedShardId();
         IndexShard indexShard = indicesService.indexServiceSafe(shardId.getIndex()).getShard(shardId.id());
         indexShard.refresh("api");
         logger.trace("{} refresh request executed on replica", indexShard.shardId());
