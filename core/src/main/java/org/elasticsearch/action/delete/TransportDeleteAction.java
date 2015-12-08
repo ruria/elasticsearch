@@ -111,7 +111,7 @@ public class TransportDeleteAction extends TransportReplicationAction<DeleteRequ
             }
         }
         ShardId shardId = clusterService.operationRouting().shardId(clusterService.state(), concreteIndex, request.id(), request.routing());
-        request.setResolvedShardId(shardId);
+        request.setShardId(shardId);
     }
 
     private void innerExecute(final DeleteRequest request, final ActionListener<DeleteResponse> listener) {
@@ -125,7 +125,7 @@ public class TransportDeleteAction extends TransportReplicationAction<DeleteRequ
 
     @Override
     protected Tuple<DeleteResponse, DeleteRequest> shardOperationOnPrimary(MetaData metaData, DeleteRequest request) {
-        IndexShard indexShard = indicesService.indexServiceSafe(request.resolvedShardId().getIndex()).getShard(request.resolvedShardId().id());
+        IndexShard indexShard = indicesService.indexServiceSafe(request.shardId().getIndex()).getShard(request.shardId().id());
         Engine.Delete delete = indexShard.prepareDelete(request.type(), request.id(), request.version(), request.versionType(), Engine.Operation.Origin.PRIMARY);
         indexShard.delete(delete);
         // update the request with the version so it will go to the replicas
@@ -135,13 +135,13 @@ public class TransportDeleteAction extends TransportReplicationAction<DeleteRequ
         assert request.versionType().validateVersionForWrites(request.version());
         processAfter(request.refresh(), indexShard, delete.getTranslogLocation());
 
-        DeleteResponse response = new DeleteResponse(request.resolvedShardId().getIndex(), request.type(), request.id(), delete.version(), delete.found());
+        DeleteResponse response = new DeleteResponse(request.shardId().getIndex(), request.type(), request.id(), delete.version(), delete.found());
         return new Tuple<>(response, request);
     }
 
     @Override
     protected void shardOperationOnReplica(DeleteRequest request) {
-        final ShardId shardId = request.resolvedShardId();
+        final ShardId shardId = request.shardId();
         IndexShard indexShard = indicesService.indexServiceSafe(shardId.getIndex()).getShard(shardId.id());
         Engine.Delete delete = indexShard.prepareDelete(request.type(), request.id(), request.version(), request.versionType(), Engine.Operation.Origin.REPLICA);
 

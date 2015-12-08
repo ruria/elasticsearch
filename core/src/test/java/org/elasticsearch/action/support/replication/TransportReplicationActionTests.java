@@ -226,7 +226,7 @@ public class TransportReplicationActionTests extends ESTestCase {
         TransportReplicationAction.ReroutePhase reroutePhase = action.new ReroutePhase(request, listener);
         assertTrue(reroutePhase.checkBlocksAndResolveRequest());
         reroutePhase.run();
-        assertThat(request.resolvedShardId(), equalTo(shardId));
+        assertThat(request.shardId(), equalTo(shardId));
         logger.info("--> primary is assigned to [{}], checking request forwarded", primaryNodeId);
         final List<CapturingTransport.CapturedRequest> capturedRequests = transport.capturedRequestsByTargetNode().get(primaryNodeId);
         assertThat(capturedRequests, notNullValue());
@@ -477,7 +477,7 @@ public class TransportReplicationActionTests extends ESTestCase {
         TransportReplicationAction<Request, Request, Response>.ReplicationPhase replicationPhase =
                 action.new ReplicationPhase(request,
                         new Response(),
-                        request.resolvedShardId(), createTransportChannel(listener), reference, null);
+                        request.shardId(), createTransportChannel(listener), reference, null);
 
         assertThat(replicationPhase.totalShards(), equalTo(totalShards));
         assertThat(replicationPhase.pending(), equalTo(assignedReplicas));
@@ -680,7 +680,6 @@ public class TransportReplicationActionTests extends ESTestCase {
     }
 
     public static class Request extends ReplicationRequest<Request> {
-        int shardId;
         public AtomicBoolean processedOnPrimary = new AtomicBoolean();
         public AtomicInteger processedOnReplicas = new AtomicInteger();
 
@@ -689,22 +688,19 @@ public class TransportReplicationActionTests extends ESTestCase {
 
         Request(ShardId shardId) {
             this();
-            this.shardId = shardId.id();
+            this.shardId = shardId;
             this.index = shardId.getIndex();
-            this.resolvedShardId = shardId;
             // keep things simple
         }
 
         @Override
         public void writeTo(StreamOutput out) throws IOException {
             super.writeTo(out);
-            out.writeVInt(shardId);
         }
 
         @Override
         public void readFrom(StreamInput in) throws IOException {
             super.readFrom(in);
-            shardId = in.readVInt();
         }
     }
 
@@ -781,7 +777,7 @@ public class TransportReplicationActionTests extends ESTestCase {
 
         @Override
         protected Tuple<Response, Request> shardOperationOnPrimary(MetaData metaData, Request shardRequest) throws Throwable {
-            return throwException(shardRequest.resolvedShardId());
+            return throwException(shardRequest.shardId());
         }
 
         private Tuple<Response, Request> throwException(ShardId shardId) {
@@ -803,7 +799,7 @@ public class TransportReplicationActionTests extends ESTestCase {
 
         @Override
         protected void shardOperationOnReplica(Request shardRequest) {
-            throwException(shardRequest.resolvedShardId());
+            throwException(shardRequest.shardId());
         }
     }
 

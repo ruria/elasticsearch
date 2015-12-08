@@ -126,7 +126,7 @@ public class TransportIndexAction extends TransportReplicationAction<IndexReques
         }
         request.process(metaData, mappingMd, allowIdGeneration, concreteIndex);
         ShardId shardId = clusterService.operationRouting().shardId(clusterService.state(), concreteIndex, request.id(), request.routing());
-        request.setResolvedShardId(shardId);
+        request.setShardId(shardId);
     }
 
     private void innerExecute(final IndexRequest request, final ActionListener<IndexResponse> listener) {
@@ -142,16 +142,16 @@ public class TransportIndexAction extends TransportReplicationAction<IndexReques
     protected Tuple<IndexResponse, IndexRequest> shardOperationOnPrimary(MetaData metaData, IndexRequest request) throws Throwable {
 
         // validate, if routing is required, that we got routing
-        IndexMetaData indexMetaData = metaData.index(request.resolvedShardId().getIndex());
+        IndexMetaData indexMetaData = metaData.index(request.shardId().getIndex());
         MappingMetaData mappingMd = indexMetaData.mappingOrDefault(request.type());
         if (mappingMd != null && mappingMd.routing().required()) {
             if (request.routing() == null) {
-                throw new RoutingMissingException(request.resolvedShardId().getIndex(), request.type(), request.id());
+                throw new RoutingMissingException(request.shardId().getIndex(), request.type(), request.id());
             }
         }
 
-        IndexService indexService = indicesService.indexServiceSafe(request.resolvedShardId().getIndex());
-        IndexShard indexShard = indexService.getShard(request.resolvedShardId().id());
+        IndexService indexService = indicesService.indexServiceSafe(request.shardId().getIndex());
+        IndexShard indexShard = indexService.getShard(request.shardId().id());
 
         final WriteResult<IndexResponse> result = executeIndexRequestOnPrimary(request, indexShard);
 
@@ -163,7 +163,7 @@ public class TransportIndexAction extends TransportReplicationAction<IndexReques
 
     @Override
     protected void shardOperationOnReplica(IndexRequest request) {
-        final ShardId shardId = request.resolvedShardId();
+        final ShardId shardId = request.shardId();
         IndexService indexService = indicesService.indexServiceSafe(shardId.getIndex());
         IndexShard indexShard = indexService.getShard(shardId.id());
         SourceToParse sourceToParse = SourceToParse.source(SourceToParse.Origin.REPLICA, request.source()).index(shardId.getIndex()).type(request.type()).id(request.id())

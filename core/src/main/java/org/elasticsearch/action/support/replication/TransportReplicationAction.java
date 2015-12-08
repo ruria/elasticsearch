@@ -323,15 +323,15 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                 try {
                     failReplicaIfNeeded(t);
                 } catch (Throwable unexpected) {
-                    logger.error("{} unexpected error while failing replica", unexpected, request.resolvedShardId().id());
+                    logger.error("{} unexpected error while failing replica", unexpected, request.shardId().id());
                 } finally {
                     responseWithFailure(t);
                 }
             }
         }
         private void failReplicaIfNeeded(Throwable t) {
-            String index = request.resolvedShardId().getIndex();
-            int shardId = request.resolvedShardId().id();
+            String index = request.shardId().getIndex();
+            int shardId = request.shardId().id();
             logger.trace("failure on replica [{}][{}], action [{}], request [{}]", t, index, shardId, actionName, request);
             if (ignoreReplicaException(t) == false) {
                 IndexService indexService = indicesService.indexService(index);
@@ -359,11 +359,11 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
 
         @Override
         protected void doRun() throws Exception {
-            assert request.resolvedShardId() != null : "request shardId must be set";
-            try (Releasable shardReference = getIndexShardOperationsCounter(request.resolvedShardId())) {
+            assert request.shardId() != null : "request shardId must be set";
+            try (Releasable shardReference = getIndexShardOperationsCounter(request.shardId())) {
                 shardOperationOnReplica(request);
                 if (logger.isTraceEnabled()) {
-                    logger.trace("action [{}] completed on shard [{}] for request [{}]", transportReplicaAction, request.resolvedShardId(), request);
+                    logger.trace("action [{}] completed on shard [{}] for request [{}]", transportReplicaAction, request.shardId(), request);
                 }
             }
             channel.sendResponse(TransportResponse.Empty.INSTANCE);
@@ -412,26 +412,26 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                 return;
             }
             final ClusterState state = observer.observedState();
-            IndexShardRoutingTable indexShard = state.getRoutingTable().shardRoutingTable(request.resolvedShardId().getIndex(), request.resolvedShardId().id());
+            IndexShardRoutingTable indexShard = state.getRoutingTable().shardRoutingTable(request.shardId().getIndex(), request.shardId().id());
             final ShardRouting primary = indexShard.primaryShard();
             if (primary == null || primary.active() == false) {
-                logger.trace("primary shard [{}] is not yet active, scheduling a retry: action [{}], request [{}], cluster state version [{}]", request.resolvedShardId(), actionName, request, state.version());
-                retryBecauseUnavailable(request.resolvedShardId(), "primary shard is not active");
+                logger.trace("primary shard [{}] is not yet active, scheduling a retry: action [{}], request [{}], cluster state version [{}]", request.shardId(), actionName, request, state.version());
+                retryBecauseUnavailable(request.shardId(), "primary shard is not active");
                 return;
             }
             if (state.nodes().nodeExists(primary.currentNodeId()) == false) {
-                logger.trace("primary shard [{}] is assigned to an unknown node [{}], scheduling a retry: action [{}], request [{}], cluster state version [{}]", request.resolvedShardId(), primary.currentNodeId(), actionName, request, state.version());
-                retryBecauseUnavailable(request.resolvedShardId(), "primary shard isn't assigned to a known node.");
+                logger.trace("primary shard [{}] is assigned to an unknown node [{}], scheduling a retry: action [{}], request [{}], cluster state version [{}]", request.shardId(), primary.currentNodeId(), actionName, request, state.version());
+                retryBecauseUnavailable(request.shardId(), "primary shard isn't assigned to a known node.");
                 return;
             }
             if (primary.currentNodeId().equals(state.nodes().localNodeId())) {
                 if (logger.isTraceEnabled()) {
-                    logger.trace("send action [{}] on primary [{}] for request [{}] with cluster state version [{}] to [{}] ", transportPrimaryAction, request.resolvedShardId(), request, state.version(), primary.currentNodeId());
+                    logger.trace("send action [{}] on primary [{}] for request [{}] with cluster state version [{}] to [{}] ", transportPrimaryAction, request.shardId(), request, state.version(), primary.currentNodeId());
                 }
                 performAction(primary.currentNodeId(), transportPrimaryAction, true);
             } else {
                 if (logger.isTraceEnabled()) {
-                    logger.trace("send action [{}] on primary [{}] for request [{}] with cluster state version [{} to [{}]]", actionName, request.resolvedShardId(), request, state.version(), primary.currentNodeId());
+                    logger.trace("send action [{}] on primary [{}] for request [{}] with cluster state version [{} to [{}]]", actionName, request.shardId(), request, state.version(), primary.currentNodeId());
                 }
                 performAction(primary.currentNodeId(), actionName, false);
             }
@@ -468,7 +468,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             }
             // request does not have a shardId yet, we need to pass the concrete index to resolve shardId
             resolveRequest(clusterState.metaData(), concreteIndex, request);
-            assert request.resolvedShardId() != null : "request shardId must be set in resolveRequest";
+            assert request.shardId() != null : "request shardId must be set in resolveRequest";
             return true;
         }
 
@@ -595,8 +595,8 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
         @Override
         protected void doRun() throws Exception {
             // request shardID was set in ReroutePhase
-            assert request.resolvedShardId() != null : "request shardID must be set prior to primary phase";
-            final ShardId shardId = request.resolvedShardId();
+            assert request.shardId() != null : "request shardID must be set prior to primary phase";
+            final ShardId shardId = request.shardId();
             final String writeConsistencyFailure = checkWriteConsistency(shardId);
             if (writeConsistencyFailure != null) {
                 finishBecauseUnavailable(shardId, writeConsistencyFailure);

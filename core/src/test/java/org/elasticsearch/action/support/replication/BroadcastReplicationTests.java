@@ -193,7 +193,7 @@ public class BroadcastReplicationTests extends ESTestCase {
 
         @Override
         protected ReplicationRequest newShardRequest(BroadcastRequest request, ShardId shardId) {
-            return new ReplicationRequest().setResolvedShardId(shardId);
+            return new ReplicationRequest().setShardId(shardId);
         }
 
         @Override

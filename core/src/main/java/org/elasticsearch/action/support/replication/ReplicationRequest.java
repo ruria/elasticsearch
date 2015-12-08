@@ -47,7 +47,7 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
      * shard id gets resolved by the transport action before performing request operation
      * and at request creation time for shard-level bulk, refresh and flush requests.
      */
-    protected ShardId resolvedShardId;
+    protected ShardId shardId;
 
     protected TimeValue timeout = DEFAULT_TIMEOUT;
     protected String index;
@@ -71,7 +71,7 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
     public ReplicationRequest(ActionRequest request, ShardId shardId) {
         super(request);
         this.index = shardId.getIndex();
-        this.resolvedShardId = shardId;
+        this.shardId = shardId;
     }
 
     /**
@@ -142,8 +142,8 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
      */
     public
     @Nullable
-    ShardId resolvedShardId() {
-        return resolvedShardId;
+    ShardId shardId() {
+        return shardId;
     }
 
     /**
@@ -168,9 +168,9 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
         if (in.readBoolean()) {
-            resolvedShardId = ShardId.readShardId(in);
+            shardId = ShardId.readShardId(in);
         } else {
-            resolvedShardId = null;
+            shardId = null;
         }
         consistencyLevel = WriteConsistencyLevel.fromId(in.readByte());
         timeout = TimeValue.readTimeValue(in);
@@ -180,9 +180,9 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        if (resolvedShardId != null) {
+        if (shardId != null) {
             out.writeBoolean(true);
-            resolvedShardId.writeTo(out);
+            shardId.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
@@ -195,8 +195,8 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
      * Sets the target shard id for the request. The shard id is set when a
      * index/delete request is resolved by the transport action
      */
-    public T setResolvedShardId(ShardId shardId) {
-        this.resolvedShardId = shardId;
+    public T setShardId(ShardId shardId) {
+        this.shardId = shardId;
         return (T) this;
     }
 }
