@@ -735,10 +735,6 @@ public class TransportReplicationActionTests extends ESTestCase {
         }
 
         @Override
-        protected void resolveRequest(MetaData metaData, String concreteIndex, Request request) {
-        }
-
-        @Override
         protected boolean checkWriteConsistency() {
             return false;
         }

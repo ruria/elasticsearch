@@ -102,11 +102,6 @@ public class TransportShardBulkAction extends TransportReplicationAction<BulkSha
     }
 
     @Override
-    protected void resolveRequest(MetaData metaData, String concreteIndex, BulkShardRequest request) {
-        // the request shardID already resolved at request construction
-    }
-
-    @Override
     protected Tuple<BulkShardResponse, BulkShardRequest> shardOperationOnPrimary(MetaData metaData, BulkShardRequest request) {
         final IndexService indexService = indicesService.indexServiceSafe(request.index());
         final IndexShard indexShard = indexService.getShard(request.shardId().id());

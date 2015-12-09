@@ -140,7 +140,9 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
      * Resolves the target shard id of the incoming request.
      * Additional processing or validation of the request should be done here.
      */
-    protected abstract void resolveRequest(MetaData metaData, String concreteIndex, Request request);
+    protected void resolveRequest(MetaData metaData, String concreteIndex, Request request) {
+        // implementation should be provided if request shardID is not already resolved at request construction
+    }
 
     /**
      * Primary operation on node with primary copy, the provided metadata should be used for request validation if needed

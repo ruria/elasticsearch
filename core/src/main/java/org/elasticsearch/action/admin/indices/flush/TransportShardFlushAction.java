@@ -88,11 +88,6 @@ public class TransportShardFlushAction extends TransportReplicationAction<ShardF
     }
 
     @Override
-    protected void resolveRequest(MetaData metaData, String concreteIndex, ShardFlushRequest request) {
-        // request shardID already resolved at request construction
-    }
-
-    @Override
     protected boolean shouldExecuteReplication(Settings settings) {
         return true;
     }
