@@ -204,9 +204,6 @@ public class OperationRouting extends AbstractComponent {
         return indexRouting;
     }
 
-
-    // either routing is set, or type/id are set
-
     protected IndexShardRoutingTable shards(ClusterState clusterState, String index, String id, String routing) {
         int shardId = generateShardId(clusterState, index, id, routing);
         return clusterState.getRoutingTable().shardRoutingTable(index, shardId);
