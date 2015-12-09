@@ -131,7 +131,7 @@ public class TransportReplicationActionTests extends ESTestCase {
                 .addGlobalBlock(new ClusterBlock(1, "non retryable", false, true, RestStatus.SERVICE_UNAVAILABLE, ClusterBlockLevel.ALL));
         clusterService.setState(ClusterState.builder(clusterService.state()).blocks(block));
         TransportReplicationAction.ReroutePhase reroutePhase = action.new ReroutePhase(request, listener);
-        assertFalse("primary phase should stop execution", reroutePhase.checkBlocksAndResolveRequest());
+        reroutePhase.run();
         assertListenerThrows("primary phase should fail operation", listener, ClusterBlockException.class);
 
         block = ClusterBlocks.builder()
@@ -139,13 +139,13 @@ public class TransportReplicationActionTests extends ESTestCase {
         clusterService.setState(ClusterState.builder(clusterService.state()).blocks(block));
         listener = new PlainActionFuture<>();
         reroutePhase = action.new ReroutePhase(new Request().timeout("5ms"), listener);
-        assertFalse("primary phase should stop execution on retryable block", reroutePhase.checkBlocksAndResolveRequest());
+        reroutePhase.run();
         assertListenerThrows("failed to timeout on retryable block", listener, ClusterBlockException.class);
 
 
         listener = new PlainActionFuture<>();
         reroutePhase = action.new ReroutePhase(new Request(), listener);
-        assertFalse("primary phase should stop execution on retryable block", reroutePhase.checkBlocksAndResolveRequest());
+        reroutePhase.run();
         assertFalse("primary phase should wait on retryable block", listener.isDone());
 
         block = ClusterBlocks.builder()
@@ -224,7 +224,6 @@ public class TransportReplicationActionTests extends ESTestCase {
         PlainActionFuture<Response> listener = new PlainActionFuture<>();
 
         TransportReplicationAction.ReroutePhase reroutePhase = action.new ReroutePhase(request, listener);
-        assertTrue(reroutePhase.checkBlocksAndResolveRequest());
         reroutePhase.run();
         assertThat(request.shardId(), equalTo(shardId));
         logger.info("--> primary is assigned to [{}], checking request forwarded", primaryNodeId);
