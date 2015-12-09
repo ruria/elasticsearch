@@ -448,30 +448,29 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             final ClusterState clusterState = observer.observedState();
             ClusterBlockException blockException = clusterState.blocks().globalBlockedException(globalBlockLevel());
             if (blockException != null) {
-                if (blockException.retryable()) {
-                    logger.trace("cluster is blocked ({}), scheduling a retry", blockException.getMessage());
-                    retry(blockException);
-                } else {
-                    finishAsFailed(blockException);
-                }
+                handleBlockException(blockException);
                 return false;
             }
             final String concreteIndex = resolveIndex() ?
                     indexNameExpressionResolver.concreteSingleIndex(clusterState, request) : request.index();
             blockException = clusterState.blocks().indexBlockedException(indexBlockLevel(), concreteIndex);
             if (blockException != null) {
-                if (blockException.retryable()) {
-                    logger.trace("cluster is blocked ({}), scheduling a retry", blockException.getMessage());
-                    retry(blockException);
-                } else {
-                    finishAsFailed(blockException);
-                }
+                handleBlockException(blockException);
                 return false;
             }
             // request does not have a shardId yet, we need to pass the concrete index to resolve shardId
             resolveRequest(clusterState.metaData(), concreteIndex, request);
             assert request.shardId() != null : "request shardId must be set in resolveRequest";
             return true;
+        }
+
+        private void handleBlockException(ClusterBlockException blockException) {
+            if (blockException.retryable()) {
+                logger.trace("cluster is blocked ({}), scheduling a retry", blockException.getMessage());
+                retry(blockException);
+            } else {
+                finishAsFailed(blockException);
+            }
         }
 
         private void performAction(final String nodeId, final String action, final boolean isPrimaryAction) {
@@ -562,7 +561,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                 }
                 listener.onResponse(response);
             } else {
-                assert false : "finishOnRemoteSuccess called but operation is already finished";
+                assert false : "finishOnSuccess called but operation is already finished";
             }
         }
 
