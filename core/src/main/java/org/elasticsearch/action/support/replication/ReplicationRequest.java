@@ -199,4 +199,13 @@ public class ReplicationRequest<T extends ReplicationRequest> extends ActionRequ
         this.shardId = shardId;
         return (T) this;
     }
+
+    @Override
+    public String toString() {
+        if (shardId != null) {
+            return shardId.toString();
+        } else {
+            return index;
+        }
+    }
 }
