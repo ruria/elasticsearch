@@ -409,11 +409,23 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
 
         @Override
         protected void doRun() {
-            // shardID added to the request, as a side effect of calling resolveRequest
-            if (checkBlocksAndResolveRequest() == false) {
+            final ClusterState state = observer.observedState();
+            ClusterBlockException blockException = state.blocks().globalBlockedException(globalBlockLevel());
+            if (blockException != null) {
+                handleBlockException(blockException);
                 return;
             }
-            final ClusterState state = observer.observedState();
+            final String concreteIndex = resolveIndex() ?
+                    indexNameExpressionResolver.concreteSingleIndex(state, request) : request.index();
+            blockException = state.blocks().indexBlockedException(indexBlockLevel(), concreteIndex);
+            if (blockException != null) {
+                handleBlockException(blockException);
+                return;
+            }
+            // request does not have a shardId yet, we need to pass the concrete index to resolve shardId
+            resolveRequest(state.metaData(), concreteIndex, request);
+            assert request.shardId() != null : "request shardId must be set in resolveRequest";
+
             IndexShardRoutingTable indexShard = state.getRoutingTable().shardRoutingTable(request.shardId().getIndex(), request.shardId().id());
             final ShardRouting primary = indexShard.primaryShard();
             if (primary == null || primary.active() == false) {
@@ -426,42 +438,18 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                 retryBecauseUnavailable(request.shardId(), "primary shard isn't assigned to a known node.");
                 return;
             }
+            final DiscoveryNode node = observer.observedState().nodes().get(primary.currentNodeId());
             if (primary.currentNodeId().equals(state.nodes().localNodeId())) {
                 if (logger.isTraceEnabled()) {
                     logger.trace("send action [{}] on primary [{}] for request [{}] with cluster state version [{}] to [{}] ", transportPrimaryAction, request.shardId(), request, state.version(), primary.currentNodeId());
                 }
-                performAction(primary.currentNodeId(), transportPrimaryAction, true);
+                performAction(node, transportPrimaryAction, true);
             } else {
                 if (logger.isTraceEnabled()) {
                     logger.trace("send action [{}] on primary [{}] for request [{}] with cluster state version [{} to [{}]]", actionName, request.shardId(), request, state.version(), primary.currentNodeId());
                 }
-                performAction(primary.currentNodeId(), actionName, false);
+                performAction(node, actionName, false);
             }
-        }
-
-        /**
-         * checks for any cluster state blocks. Returns true if operation is OK to proceed and request is resolved
-         * if false is return, no further action is needed. The method takes care of any continuation, by either
-         * responding to the listener or scheduling a retry.
-         */
-        protected boolean checkBlocksAndResolveRequest() {
-            final ClusterState clusterState = observer.observedState();
-            ClusterBlockException blockException = clusterState.blocks().globalBlockedException(globalBlockLevel());
-            if (blockException != null) {
-                handleBlockException(blockException);
-                return false;
-            }
-            final String concreteIndex = resolveIndex() ?
-                    indexNameExpressionResolver.concreteSingleIndex(clusterState, request) : request.index();
-            blockException = clusterState.blocks().indexBlockedException(indexBlockLevel(), concreteIndex);
-            if (blockException != null) {
-                handleBlockException(blockException);
-                return false;
-            }
-            // request does not have a shardId yet, we need to pass the concrete index to resolve shardId
-            resolveRequest(clusterState.metaData(), concreteIndex, request);
-            assert request.shardId() != null : "request shardId must be set in resolveRequest";
-            return true;
         }
 
         private void handleBlockException(ClusterBlockException blockException) {
@@ -473,8 +461,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
             }
         }
 
-        private void performAction(final String nodeId, final String action, final boolean isPrimaryAction) {
-            DiscoveryNode node = observer.observedState().nodes().get(nodeId);
+        private void performAction(final DiscoveryNode node, final String action, final boolean isPrimaryAction) {
             transportService.sendRequest(node, action, request, transportOptions, new BaseTransportResponseHandler<Response>() {
 
                 @Override
@@ -498,7 +485,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
                         // if we got disconnected from the node, or the node / shard is not in the right state (being closed)
                         if (exp.unwrapCause() instanceof ConnectTransportException || exp.unwrapCause() instanceof NodeClosedException ||
                                 (isPrimaryAction && retryPrimaryException(exp.unwrapCause()))) {
-                            logger.trace("received an error from node [{}] for request [{}], scheduling a retry", exp, nodeId, request);
+                            logger.trace("received an error from node [{}] for request [{}], scheduling a retry", exp, node.id(), request);
                             retry(exp);
                         } else {
                             finishAsFailed(exp);
