@@ -46,6 +46,23 @@ public class HttpServerModule extends AbstractModule {
     @SuppressWarnings({"unchecked"})
     @Override
     protected void configure() {
+        Class<? extends HttpServerTransport> httpServerTransport = null;
+        String http_type = settings.get("http.type");
+        if (http_type != null) {
+            try {
+                httpServerTransport = (Class<? extends HttpServerTransport>) Class.forName(http_type);
+            }
+            catch (ClassNotFoundException e) {
+                logger.error("Can´t use [{}] as http transport. Class Not found Exception.", http_type);
+            }
+        }
+        else {
+            httpServerTransport = NettyHttpServerTransport.class;
+        }
+        
+        this.httpServerTransportClass = httpServerTransport;
+        logger.info("Using [{}] as http transport.", this.httpServerTransportClass.getName());
+        
         bind(HttpServerTransport.class).to(httpServerTransportClass).asEagerSingleton();
         bind(HttpServer.class).asEagerSingleton();
     }
